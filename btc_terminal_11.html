@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Intelligence Terminal</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg0:#070910;--bg1:#0c0f14;--bg2:#111520;--bg3:#161b28;
+  --border:#1e2636;--border2:#2a3347;
+  --text0:#e8ecf4;--text1:#9aa3b8;--text2:#5a6478;
+  --green:#22c55e;--green-bg:#071a0f;--green-border:#0f3a1e;
+  --red:#ef4444;--red-bg:#1a0707;--red-border:#3d1010;
+  --amber:#f59e0b;--amber-bg:#1a1200;--amber-border:#3d2e00;
+}
+body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monospace;font-size:11px;min-height:100vh;overflow-x:hidden}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+@keyframes flashUp{0%{background:#071a0f}100%{background:var(--bg1)}}
+@keyframes flashDn{0%{background:#1a0707}100%{background:var(--bg1)}}
+.flash-up{animation:flashUp 0.4s ease}
+.flash-dn{animation:flashDn 0.4s ease}
+
+/* HEADER */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg1);position:sticky;top:0;z-index:100}
+.hdr-title{font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;color:var(--text0);letter-spacing:.1em;text-transform:uppercase}
+.live-badge{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--green);border:1px solid var(--green-border);background:var(--green-bg);padding:2px 7px;border-radius:2px;letter-spacing:.1em}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 1.8s infinite}
+.clock{font-size:10px;color:var(--text2);font-variant-numeric:tabular-nums}
+.conn{font-size:9px;padding:2px 7px;border-radius:2px;letter-spacing:.08em}
+.conn-ok{color:var(--green);background:var(--green-bg);border:1px solid var(--green-border)}
+.conn-err{color:var(--red);background:var(--red-bg);border:1px solid var(--red-border)}
+.conn-wait{color:var(--amber);background:var(--amber-bg);border:1px solid var(--amber-border)}
+
+/* TAPE */
+.tape-wrap{overflow:hidden;background:var(--bg1);border-bottom:1px solid var(--border);padding:5px 0}
+.tape-inner{display:flex;gap:32px;animation:scrolltape 35s linear infinite;white-space:nowrap;width:max-content}
+@keyframes scrolltape{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.tape-item{font-size:10px;display:flex;gap:6px}
+.tape-sym{color:var(--text2)}
+.tape-price{color:var(--text0);font-variant-numeric:tabular-nums}
+
+/* LAYOUT */
+.main{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.g5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+@media(max-width:900px){.g5,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.g3,.g2{grid-template-columns:1fr}}
+
+/* COMPOSITE */
+.composite{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;padding:12px 16px;background:var(--bg1);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:3px}
+.comp-score{font-size:42px;font-weight:500;color:var(--green);line-height:1;font-variant-numeric:tabular-nums;min-width:70px}
+.comp-label{font-size:9px;color:var(--text2);letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}
+.comp-desc{font-size:11px;color:var(--text0);margin-bottom:6px}
+.comp-pips{display:flex;gap:3px}
+.pip{width:18px;height:3px;border-radius:1px}
+.comp-updated{font-size:9px;color:var(--text2);text-align:right}
+
+/* SECTION */
+.sec{font-size:9px;color:var(--text2);letter-spacing:.14em;text-transform:uppercase;padding:0 0 6px 8px;border-left:2px solid var(--border2);margin-top:4px}
+
+/* CARD */
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:3px;padding:10px 12px;position:relative;overflow:hidden}
+.lbl{font-size:9px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.val{font-size:20px;font-weight:500;color:var(--text0);line-height:1;font-variant-numeric:tabular-nums}
+.val.lg{font-size:26px}
+.val.sm{font-size:15px}
+.sub{font-size:10px;margin-top:4px;color:var(--text1)}
+.src{font-size:8px;color:var(--text2);margin-top:5px;display:flex;align-items:center;gap:4px}
+.up{color:var(--green)!important}
+.dn{color:var(--red)!important}
+.neu{color:var(--amber)!important}
+.mut{color:var(--text2)!important}
+.sdot{display:inline-block;width:5px;height:5px;border-radius:50%}
+.sdot-ok{background:var(--green)}
+.sdot-err{background:var(--red)}
+.sdot-wait{background:var(--amber);animation:blink 1s infinite}
+
+/* FLOAT */
+.float-bar-track{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:8px 0}
+.float-bar-fill{height:100%;background:var(--red);border-radius:3px;transition:width .6s ease}
+.deduct-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--bg2);font-size:10px}
+.deduct-row:last-child{border-bottom:none;padding-top:6px;border-top:1px solid var(--border2);font-size:11px}
+
+/* SIGNAL TABLE */
+.sig-table{background:var(--bg1);border:1px solid var(--border);border-radius:3px;overflow:hidden}
+.sig-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;padding:6px 12px;border-bottom:1px solid var(--bg2)}
+.sig-row:last-child{border-bottom:none}
+.sig-row:hover{background:var(--bg2)}
+.sig-name{font-size:10px;color:var(--text1)}
+.sig-val{font-size:10px;font-weight:500;font-variant-numeric:tabular-nums}
+.badge{font-size:8px;padding:2px 6px;border-radius:2px;font-weight:500;letter-spacing:.08em;white-space:nowrap}
+.b-up{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.b-dn{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.b-neu{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+
+/* INPUT */
+.inp{background:var(--bg3);border:1px solid var(--border2);color:var(--text0);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:4px 8px;border-radius:2px}
+.inp:focus{outline:none;border-color:var(--text2)}
+.btn{background:var(--bg3);border:1px solid var(--border2);color:var(--text1);font-family:'IBM Plex Mono',monospace;font-size:9px;padding:4px 10px;border-radius:2px;cursor:pointer;letter-spacing:.08em;text-transform:uppercase}
+.btn:hover{border-color:var(--text2);color:var(--text0)}
+.btn.active{color:var(--green);border-color:var(--green-border)}
+
+/* MSBT */
+.msbt-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+
+/* PREMIUM */
+.prem-row{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--bg2)}
+.prem-row:last-child{border-bottom:none}
+
+/* API KEY PANEL */
+.key-panel{background:var(--bg1);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:3px;padding:12px}
+.key-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.key-note{font-size:9px;color:var(--text2);line-height:1.6}
+
+.footer{padding:10px 16px;text-align:center;font-size:9px;color:var(--text2);border-top:1px solid var(--border);margin-top:8px}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="hdr-title">BTC Intelligence Terminal</span>
+    <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span class="conn conn-wait" id="c-bn">BN WS</span>
+    <span class="conn conn-wait" id="c-cb">CB WS</span>
+    <span class="conn conn-wait" id="c-rest">REST</span>
+    <span class="clock" id="clock">--:--:-- UTC</span>
+  </div>
+</div>
+
+<div class="tape-wrap">
+  <div class="tape-inner" id="tape-inner">
+    <!-- populated by JS -->
+  </div>
+</div>
+
+<div class="main">
+
+<!-- COMPOSITE -->
+<div class="composite">
+  <div class="comp-score" id="comp-num">--</div>
+  <div>
+    <div class="comp-label">Composite Signal Score / 10</div>
+    <div class="comp-desc" id="comp-desc">Initializing...</div>
+    <div class="comp-pips" id="comp-pips"></div>
+  </div>
+  <div class="comp-updated" id="comp-ts">--</div>
+</div>
+
+<!-- BTC PRICE & STRUCTURE -->
+<div class="sec">BTC Price & Market Structure</div>
+<div class="g4">
+  <div class="card" id="card-bn">
+    <div class="lbl">Binance BTC/USDT</div>
+    <div class="val lg" id="bn-price">--</div>
+    <div class="sub" id="bn-chg">--</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-bn"></span>data-stream.binance.vision</div>
+  </div>
+  <div class="card" id="card-cb">
+    <div class="lbl">Coinbase BTC/USD</div>
+    <div class="val lg" id="cb-price">--</div>
+    <div class="sub" id="cb-chg">--</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-cb"></span>ws-feed.exchange.coinbase.com</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Exchange Premiums</div>
+    <div class="prem-row"><span style="font-size:10px;color:var(--text1)">CB vs BN</span><span class="val sm" id="cb-prem">--</span></div>
+    <div class="prem-row"><span style="font-size:10px;color:var(--text1)">Premium %</span><span class="val sm" id="cb-prem-pct">--</span></div>
+    <div class="prem-row"><span style="font-size:10px;color:var(--text1)">Signal</span><span class="val sm" id="bid-signal">--</span></div>
+  </div>
+  <div class="card">
+    <div class="lbl">Bid / Ask Ratio</div>
+    <div class="val lg" id="ba-ratio">--</div>
+    <div class="sub" id="ba-desc">--</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-ob"></span>depth5@100ms</div>
+  </div>
+</div>
+<div class="g4">
+  <div class="card">
+    <div class="lbl">Fear / Greed</div>
+    <div class="val lg dn" id="fg-val">--</div>
+    <div class="sub dn" id="fg-lbl">--</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-fg"></span>alternative.me/fng</div>
+  </div>
+  <div class="card">
+    <div class="lbl">RSI (14-Day)</div>
+    <div class="val lg neu" id="rsi-val">--</div>
+    <div class="sub neu" id="rsi-lbl">Loading...</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-rsi"></span>Binance daily klines</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Funding Rate (Perp)</div>
+    <div class="val sm" id="fund-val">--</div>
+    <div class="sub" id="fund-desc">--</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-fund"></span>fstream.binance.com</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Open Interest</div>
+    <div class="val sm" id="oi-val">--</div>
+    <div class="sub" id="oi-sub">--</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-oi"></span>CoinGecko derivatives</div>
+  </div>
+</div>
+
+<!-- SUPPLY COMPRESSION -->
+<div class="sec">Supply Compression Model — Manual</div>
+<div class="card">
+  <div style="display:grid;grid-template-columns:1fr auto;align-items:start;gap:12px;margin-bottom:10px">
+    <div>
+      <div class="lbl">Tradeable Float — All Exchanges (Your Derived Model)</div>
+      <div class="val dn" style="font-size:28px" id="float-val">408,200 BTC</div>
+      <div class="sub dn" id="float-delta">Enter today's outflow and hit Update</div>
+    </div>
+    <div style="text-align:right">
+      <div class="lbl">% of Mar 10 Peak</div>
+      <div class="val sm dn" id="float-pct">37.1%</div>
+      <div class="lbl" style="margin-top:6px">Rate</div>
+      <div class="val sm dn" id="float-rate">--</div>
+    </div>
+  </div>
+  <div class="float-bar-track"><div class="float-bar-fill" id="float-bar" style="width:37.1%"></div></div>
+  <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text2);margin-bottom:10px">
+    <span>0</span><span>1.1M (Mar 10 peak)</span>
+  </div>
+  <div style="margin-bottom:8px;font-size:9px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase">Deduction Model</div>
+  <div class="deduct-row"><span style="color:var(--text1)">Gross exchange reserves</span><span class="mut">2,350,000 BTC</span></div>
+  <div class="deduct-row"><span style="color:var(--text1)">ETF custodial (IBIT, FBTC, ARKB...)</span><span class="dn">− 1,300,000 BTC</span></div>
+  <div class="deduct-row"><span style="color:var(--text1)">Corporate treasury (MSTR 762k+)</span><span class="dn">− 880,000 BTC</span></div>
+  <div class="deduct-row"><span style="color:var(--text1)">MSBT pre-seed custody migration</span><span class="dn">− ~45,000 BTC</span></div>
+  <div class="deduct-row"><span style="color:var(--text0);font-weight:500">Tradeable float</span><span class="up" id="float-result">~408,200 BTC</span></div>
+  <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
+    <span style="color:var(--text2);font-size:10px">Update:</span>
+    <input class="inp" id="float-input" type="number" placeholder="New float (e.g. 401000)" style="width:180px">
+    <input class="inp" id="outflow-input" type="number" placeholder="Today's outflow" style="width:150px">
+    <button class="btn" onclick="updateFloat()">Update Float</button>
+    <span style="font-size:9px;color:var(--text2)" id="float-ts">not yet updated</span>
+  </div>
+</div>
+
+<div class="g3">
+  <div class="card">
+    <div class="lbl">24h Exchange Netflow</div>
+    <div class="val sm dn" id="netflow-val">-12,000 BTC</div>
+    <div class="sub dn">Net outflow → bullish</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Strategy Holdings</div>
+    <div class="val sm up">762,099 BTC</div>
+    <div class="sub mut">+43,346 BTC in Q1 · $42B ATM reloaded</div>
+  </div>
+  <div class="card">
+    <div class="lbl">ETF Net Flows (Daily)</div>
+    <div class="val sm" id="etf-val">+$312M</div>
+    <div class="sub up">Net inflow · IBIT leading</div>
+  </div>
+</div>
+
+<!-- STABLECOIN FLOWS -->
+<div class="sec">Stablecoin Flows & Dry Powder</div>
+<div class="g2">
+  <div class="card">
+    <div class="lbl">New Stablecoin Mints (24h)</div>
+    <div class="val sm up">+$1.84B</div>
+    <div style="margin-top:8px">
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bg2);font-size:10px"><span class="mut">USDT</span><span class="up">+$1.20B</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:10px"><span class="mut">USDC</span><span class="up">+$640M</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="lbl">S2E Ratio — Stablecoins vs BTC</div>
+    <div class="val sm up" id="s2e-val">4.72x</div>
+    <div class="sub up">Elevated dry powder → structural buy pressure</div>
+  </div>
+</div>
+
+<!-- MACRO -->
+<div class="sec">Macro Overlay</div>
+<div class="g4">
+  <div class="card">
+    <div class="lbl">10Y Treasury Yield</div>
+    <div class="val neu" id="yield-val">--</div>
+    <div class="sub" id="yield-sub">API key needed ↓</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-yield"></span>Claude proxy</div>
+  </div>
+  <div class="card">
+    <div class="lbl">DXY Index</div>
+    <div class="val" id="dxy-val">--</div>
+    <div class="sub" id="dxy-sub">Calculated from live FX</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-dxy"></span>fawazahmed0 currency API</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Gold Spot</div>
+    <div class="val" id="gold-val">--</div>
+    <div class="sub" id="gold-sub">--</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-gold"></span>api.gold-api.com</div>
+  </div>
+  <div class="card">
+    <div class="lbl">WTI Crude</div>
+    <div class="val" id="wti-val">--</div>
+    <div class="sub" id="wti-sub">API key needed ↓</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-wti"></span>Claude proxy</div>
+  </div>
+</div>
+<div class="g2">
+  <div class="card">
+    <div class="lbl">Brent Crude</div>
+    <div class="val" id="brent-val">--</div>
+    <div class="sub" id="brent-sub">API key needed ↓</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-brent"></span>Claude proxy</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Strait of Hormuz Status</div>
+    <div class="val sm neu" id="soh-val">RESTRICTED</div>
+    <div class="sub neu" id="soh-sub">5-day pause expires Sat · 82nd Airborne deploying</div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button class="btn" onclick="setSoH('OPEN','De-escalation — risk-on BTC bid','up')">Open</button>
+      <button class="btn active" onclick="setSoH('RESTRICTED','Partial — elevated war premium','neu')">Restricted</button>
+      <button class="btn" onclick="setSoH('CLOSED','Closed — flight to BTC neutral layer','dn')">Closed</button>
+    </div>
+  </div>
+</div>
+
+<!-- STRATEGY SECURITIES -->
+<div class="sec">Strategy / Preferred Securities</div>
+<div class="g4">
+  <div class="card" id="card-mstr">
+    <div class="lbl">MSTR Share Price</div>
+    <div class="val" id="mstr-val">--</div>
+    <div class="sub" id="mstr-sub">API key needed ↓</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-mstr"></span>Claude proxy</div>
+  </div>
+  <div class="card" id="card-strc">
+    <div class="lbl">STRC Share Price</div>
+    <div class="val dn" id="strc-val">--</div>
+    <div class="sub dn" id="strc-sub">API key needed ↓</div>
+    <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+      <input class="inp" id="strc-inp" type="number" placeholder="Manual override" step="0.01" style="width:130px">
+      <button class="btn" onclick="setSTRC()">Set</button>
+    </div>
+    <div class="src"><span class="sdot sdot-wait" id="d-strc"></span>Claude proxy · or manual</div>
+  </div>
+  <div class="card">
+    <div class="lbl">STRC vs Par ($100)</div>
+    <div class="val dn" id="strc-par">--</div>
+    <div class="sub mut">Max short upside: ~$0.06</div>
+    <div class="sub dn" style="margin-top:4px" id="squeeze-lbl">Squeeze risk: HIGH</div>
+  </div>
+  <div class="card">
+    <div class="lbl">ATM Capacity</div>
+    <div class="val up">$42.0B</div>
+    <div class="sub mut">Reloaded Mar 23</div>
+    <div class="sub mut" style="margin-top:4px">762,099 BTC @ $75,694 avg</div>
+  </div>
+</div>
+
+<!-- MSBT -->
+<div class="sec">MSBT Launch Tracker</div>
+<div class="card">
+  <div class="msbt-grid">
+    <div><div class="lbl">Filing Status</div><div class="val sm up" style="font-size:13px">S-1 Amended</div><div class="sub">Mar 17-18, 2026</div></div>
+    <div><div class="lbl">Ticker / Exchange</div><div class="val sm up" style="font-size:13px">MSBT / NYSE Arca</div><div class="sub">Confirmed in filing</div></div>
+    <div><div class="lbl">Est. Launch</div><div class="val sm neu" style="font-size:13px">Mid-April 2026</div><div class="sub">Pending SEC approval</div></div>
+    <div><div class="lbl">Pre-Seed Migration</div><div class="val sm dn" style="font-size:13px">~45,000 BTC</div><div class="sub dn">Coinbase cold vault</div></div>
+  </div>
+  <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text1)">
+    15,000 financial advisors · $5.5T AUM · 6-month fee waiver on first $5B · Coinbase custody (same as IBIT)
+  </div>
+</div>
+
+<!-- SIGNAL SUMMARY -->
+<div class="sec">Signal Summary</div>
+<div class="sig-table" id="sig-table"></div>
+
+<!-- API KEY -->
+<div class="sec">Anthropic API Key — Required for 10Y, WTI, Brent, MSTR, STRC</div>
+<div class="key-panel">
+  <div class="key-row">
+    <input class="inp" id="key-inp" type="password" placeholder="sk-ant-api03-..." style="width:360px;font-family:monospace">
+    <button class="btn" onclick="saveKey()">Save & Fetch</button>
+    <span id="key-status" style="font-size:10px;color:var(--text2)">No key entered</span>
+  </div>
+  <div class="key-note">
+    Stored in <strong>sessionStorage only</strong> — clears when tab closes. Get a free key at <strong>console.anthropic.com</strong> → API Keys → Create Key.<br>
+    Uses claude-haiku (~$0.001 per refresh). Each data group fetches sequentially with 10s gaps to avoid rate limits.
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<div class="footer">BTC Intelligence Terminal · Personal use · Binance WS · Coinbase WS · alternative.me · gold-api.com · fawazahmed0 · Claude proxy</div>
+
+<script>
+// ── STATE ──────────────────────────────────────
+const S = {
+  bnPrice:null, bnChgPct:null,
+  cbPrice:null, cbBid:null, cbAsk:null,
+  fundRate:null,
+  fg:null, fgLbl:null,
+  rsi:null,
+  oi:null,
+  yield10y:null, dxy:null, gold:null, wti:null, brent:null,
+  mstr:null, strc:null, strcManual:false,
+  floatVal:408200, floatPeak:1100000, todayOutflow:12000,
+  floatTs:null,
+  sohStatus:'RESTRICTED',
+};
+let _key = sessionStorage.getItem('btc_key') || '';
+
+// ── UTILS ──────────────────────────────────────
+const $ = id => document.getElementById(id);
+function fmt(n,d=0){if(n===null||isNaN(n))return'--';return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})}
+function fmtP(n,d=2){if(n===null||isNaN(n))return'--';return(n>=0?'+':'')+Number(n).toFixed(d)+'%'}
+function setV(id,val,cls){const e=$(id);if(!e)return;e.textContent=val;if(cls){e.className=e.className.replace(/\b(up|dn|neu|mut)\b/g,'').trim()+' '+cls}}
+function setDot(id,s){const e=$(id);if(!e)return;e.className='sdot sdot-'+(s==='ok'?'ok':s==='err'?'err':'wait')}
+function setConn(id,s){const e=$(id);if(!e)return;e.className='conn conn-'+(s==='ok'?'ok':s==='err'?'err':'wait')}
+function flash(id,dir){const e=$(id);if(!e)return;e.classList.remove('flash-up','flash-dn');void e.offsetWidth;e.classList.add(dir==='up'?'flash-up':'flash-dn')}
+
+// Tape
+const TAPE_FIELDS = [
+  ['BTC/USDT','t-bn'],['BTC/USD','t-cb'],['PREMIUM','t-prem'],
+  ['FUNDING','t-fund'],['F&G','t-fg'],['10Y','t-10y'],
+  ['DXY','t-dxy'],['GOLD','t-gold'],['WTI','t-wti'],
+];
+function buildTape(){
+  const inner = $('tape-inner');
+  if(!inner)return;
+  let html = '';
+  for(let i=0;i<2;i++) TAPE_FIELDS.forEach(([sym,id])=>{
+    html+=`<span class="tape-item"><span class="tape-sym">${sym}</span><span class="tape-price" id="${id+(i?'b':'')}">&mdash;</span></span>`;
+  });
+  inner.innerHTML=html;
+}
+function tapSet(id,val){const a=$(id),b=$(id+'b');if(a)a.textContent=val;if(b)b.textContent=val}
+
+// Clock
+function tickClock(){
+  const n=new Date();
+  const pad=x=>String(x).padStart(2,'0');
+  const el=$('clock'); if(el) el.textContent=pad(n.getUTCHours())+':'+pad(n.getUTCMinutes())+':'+pad(n.getUTCSeconds())+' UTC';
+}
+setInterval(tickClock,1000); tickClock();
+
+// ── BINANCE SPOT WS ──────────────────────────
+let bnWs=null, bnFails=0;
+function connectBN(){
+  try{
+    bnWs=new WebSocket('wss://data-stream.binance.vision/ws/btcusdt@ticker');
+    bnWs.onopen=()=>{setConn('c-bn','ok');setDot('d-bn','ok');bnFails=0};
+    bnWs.onmessage=e=>{
+      const d=JSON.parse(e.data);
+      const prev=S.bnPrice;
+      S.bnPrice=parseFloat(d.c); S.bnChgPct=parseFloat(d.P);
+      setV('bn-price','$'+fmt(S.bnPrice),S.bnChgPct>=0?'up':'dn');
+      setV('bn-chg',fmtP(S.bnChgPct)+' 24h · H:$'+fmt(parseFloat(d.h))+' L:$'+fmt(parseFloat(d.l)),S.bnChgPct>=0?'up':'dn');
+      tapSet('t-bn','$'+fmt(S.bnPrice)+'('+fmtP(S.bnChgPct)+')');
+      if(prev&&S.bnPrice!==prev)flash('card-bn',S.bnPrice>prev?'up':'dn');
+      updatePremium(); updateComposite(); updateS2E();
+    };
+    bnWs.onerror=()=>{setConn('c-bn','err');setDot('d-bn','err');bnFails++};
+    bnWs.onclose=()=>{setConn('c-bn','wait');setTimeout(connectBN,Math.min(3000*Math.pow(1.5,bnFails),15000));fetchBNREST()};
+  }catch{setTimeout(connectBN,5000)}
+}
+async function fetchBNREST(){
+  try{
+    const r=await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT');
+    const d=await r.json();
+    S.bnPrice=parseFloat(d.lastPrice); S.bnChgPct=parseFloat(d.priceChangePercent);
+    setV('bn-price','$'+fmt(S.bnPrice),S.bnChgPct>=0?'up':'dn');
+    setV('bn-chg',fmtP(S.bnChgPct)+' 24h',S.bnChgPct>=0?'up':'dn');
+    tapSet('t-bn','$'+fmt(S.bnPrice));
+    setDot('d-bn','ok'); updatePremium(); updateComposite(); updateS2E();
+  }catch{}
+}
+
+// ── BINANCE ORDER BOOK ───────────────────────
+let obWs=null;
+function connectOB(){
+  try{
+    obWs=new WebSocket('wss://data-stream.binance.vision/ws/btcusdt@depth5@100ms');
+    obWs.onopen=()=>setDot('d-ob','ok');
+    obWs.onmessage=e=>{
+      const d=JSON.parse(e.data);
+      if(!d.bids||!d.asks)return;
+      const bv=d.bids.reduce((s,b)=>s+parseFloat(b[1]),0);
+      const av=d.asks.reduce((s,a)=>s+parseFloat(a[1]),0);
+      const r=av>0?(bv/av):1;
+      const dir=r>1.1?'up':r<0.9?'dn':'neu';
+      const desc=r>1.2?'Strong buy pressure':r>1.05?'Mild buy pressure':r<0.8?'Sell dominant':'Balanced';
+      setV('ba-ratio',r.toFixed(2),dir); setV('ba-desc',desc,dir); setDot('d-ob','ok');
+    };
+    obWs.onerror=()=>setDot('d-ob','err');
+    obWs.onclose=()=>{setDot('d-ob','wait');setTimeout(connectOB,3000)};
+  }catch{setTimeout(connectOB,5000)}
+}
+
+// ── BINANCE FUNDING WS ───────────────────────
+let fundWs=null;
+function connectFund(){
+  try{
+    fundWs=new WebSocket('wss://fstream.binance.com/stream?streams=btcusdt@markPrice@1s');
+    fundWs.onopen=()=>setDot('d-fund','ok');
+    fundWs.onmessage=e=>{
+      const msg=JSON.parse(e.data); const d=msg.data||msg;
+      const rate=parseFloat(d.r); if(isNaN(rate))return;
+      S.fundRate=rate;
+      const pct=(rate*100).toFixed(4);
+      const ann=(rate*3*365*100).toFixed(1);
+      const dir=rate<-0.001?'dn':rate>0.001?'up':'neu';
+      const desc=rate<-0.001?'Shorts dominant — squeeze risk':rate>0.001?'Longs dominant':'Neutral';
+      setV('fund-val',pct+'% ('+ann+'% ann.)',dir); setV('fund-desc',desc,dir);
+      tapSet('t-fund',pct+'%'); setDot('d-fund','ok');
+    };
+    fundWs.onerror=()=>setDot('d-fund','err');
+    fundWs.onclose=()=>{setDot('d-fund','wait');setTimeout(connectFund,3000)};
+  }catch{setTimeout(connectFund,5000)}
+}
+async function fetchFundREST(){
+  try{
+    const r=await fetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT');
+    const d=await r.json(); const rate=parseFloat(d.lastFundingRate);
+    if(isNaN(rate))return;
+    S.fundRate=rate;
+    const dir=rate<-0.001?'dn':rate>0.001?'up':'neu';
+    setV('fund-val',(rate*100).toFixed(4)+'%',dir);
+    setV('fund-desc',rate<-0.001?'Shorts dominant':rate>0.001?'Longs dominant':'Neutral',dir);
+    setDot('d-fund','ok');
+  }catch{}
+}
+
+// ── COINBASE WS ──────────────────────────────
+let cbWs=null;
+function connectCB(){
+  try{
+    cbWs=new WebSocket('wss://ws-feed.exchange.coinbase.com');
+    cbWs.onopen=()=>{cbWs.send(JSON.stringify({type:'subscribe',product_ids:['BTC-USD'],channels:['ticker']}));setConn('c-cb','ok');setDot('d-cb','ok')};
+    cbWs.onmessage=e=>{
+      const d=JSON.parse(e.data); if(d.type!=='ticker')return;
+      const prev=S.cbPrice;
+      S.cbPrice=parseFloat(d.price); S.cbBid=parseFloat(d.best_bid); S.cbAsk=parseFloat(d.best_ask);
+      const open=parseFloat(d.open_24h); const chg=open?((S.cbPrice-open)/open*100):null;
+      setV('cb-price','$'+fmt(S.cbPrice),chg>=0?'up':'dn');
+      setV('cb-chg',(chg!==null?fmtP(chg):'--')+' 24h'+(S.cbBid?' · Bid:$'+fmt(S.cbBid):''),chg>=0?'up':'dn');
+      tapSet('t-cb','$'+fmt(S.cbPrice));
+      if(prev&&S.cbPrice!==prev)flash('card-cb',S.cbPrice>prev?'up':'dn');
+      updatePremium();
+    };
+    cbWs.onerror=()=>{setConn('c-cb','err');setDot('d-cb','err')};
+    cbWs.onclose=()=>{setConn('c-cb','wait');setDot('d-cb','wait');setTimeout(connectCB,3000)};
+  }catch{setTimeout(connectCB,5000)}
+}
+
+// ── PREMIUM ───────────────────────────────────
+function updatePremium(){
+  if(!S.cbPrice||!S.bnPrice)return;
+  const diff=S.cbPrice-S.bnPrice;
+  const dir=diff>0?'up':'dn';
+  setV('cb-prem',(diff>=0?'+':'')+Math.round(diff),dir);
+  tapSet('t-prem',(diff>=0?'+':'')+Math.round(diff));
+  setV('cb-prem-pct',(diff>=0?'+':'')+(diff/S.bnPrice*100).toFixed(4)+'%',dir);
+  const sig=diff>50?'Institutional bid strong':diff>0?'Mild CB premium':'BN leading — Asia bid';
+  setV('bid-signal',sig,diff>50?'up':diff>0?'neu':'dn');
+}
+
+// ── FEAR & GREED ─────────────────────────────
+async function fetchFG(){
+  try{
+    const r=await fetch('https://api.alternative.me/fng/?limit=1&format=json');
+    const d=await r.json(); const v=parseInt(d.data[0].value); const l=d.data[0].value_classification;
+    S.fg=v; S.fgLbl=l;
+    const dir=v<=25?'dn':v>=75?'up':'neu';
+    setV('fg-val',v.toString(),dir); setV('fg-lbl',l,dir);
+    tapSet('t-fg',v+' ('+l+')'); setDot('d-fg','ok'); setConn('c-rest','ok');
+    updateComposite();
+  }catch{setDot('d-fg','err')}
+}
+
+// ── RSI ───────────────────────────────────────
+let rsiWs=null;
+function fetchRSI(){
+  if(rsiWs&&rsiWs.readyState<2)rsiWs.close();
+  try{
+    rsiWs=new WebSocket('wss://ws-api.binance.com:443/ws-api/v3');
+    rsiWs.onopen=()=>rsiWs.send(JSON.stringify({id:'rsi',method:'klines',params:{symbol:'BTCUSDT',interval:'1d',limit:16}}));
+    rsiWs.onmessage=e=>{
+      try{
+        const m=JSON.parse(e.data); if(m.id!=='rsi'||!m.result||m.result.length<15)return;
+        const closes=m.result.map(k=>parseFloat(k[4]));
+        renderRSI(calcRSI(closes)); setDot('d-rsi','ok');
+      }catch{}
+      rsiWs.close();
+    };
+    rsiWs.onerror=()=>{setDot('d-rsi','err');fetchRSIFallback()};
+  }catch{fetchRSIFallback()}
+}
+async function fetchRSIFallback(){
+  try{
+    const r=await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/ohlc?vs_currency=usd&days=30');
+    const data=await r.json(); if(!data||data.length<15)return;
+    renderRSI(calcRSI(data.slice(-16).map(d=>d[4]))); setDot('d-rsi','ok');
+  }catch{setDot('d-rsi','err')}
+}
+function calcRSI(c){
+  let g=0,l=0;
+  for(let i=1;i<=14;i++){const d=c[i]-c[i-1];if(d>=0)g+=d;else l+=Math.abs(d)}
+  let ag=g/14,al=l/14;
+  for(let i=15;i<c.length;i++){const d=c[i]-c[i-1];ag=(ag*13+Math.max(d,0))/14;al=(al*13+Math.max(-d,0))/14}
+  return al===0?100:100-(100/(1+ag/al));
+}
+function renderRSI(rsi){
+  const r=parseFloat(rsi.toFixed(1)); S.rsi=r;
+  const dir=r<=30?'dn':r>=70?'up':'neu';
+  const lbl=r<=20?'Heavily oversold':r<=30?'Oversold — reversal zone':r<=45?'Weak momentum':r<=55?'Neutral':r<=70?'Bullish':'Overbought';
+  setV('rsi-val',r.toString(),dir); setV('rsi-lbl',lbl,dir); updateComposite();
+}
+
+// ── OI ────────────────────────────────────────
+async function fetchOI(){
+  try{
+    const r=await fetch('https://api.coingecko.com/api/v3/derivatives/exchanges/binance_futures?include_tickers=unexpired');
+    const d=await r.json();
+    let total=0;
+    (d.tickers||[]).forEach(t=>{if(t.base==='BTC'&&t.open_interest_usd)total+=parseFloat(t.open_interest_usd)});
+    if(total>0){S.oi=total;setV('oi-val','$'+(total/1e9).toFixed(2)+'B','neu');setV('oi-sub','BTC perp + futures · Binance');setDot('d-oi','ok')}
+    else throw new Error();
+  }catch{
+    try{
+      const r2=await fetch('https://api.coingecko.com/api/v3/derivatives?include_tickers=unexpired');
+      const t=await r2.json();
+      const btc=t.filter(x=>x.market==='Binance (Futures)'&&x.base==='BTC');
+      if(btc.length){const tot=btc.reduce((s,x)=>s+(parseFloat(x.open_interest_usd)||0),0);S.oi=tot;setV('oi-val','$'+(tot/1e9).toFixed(2)+'B');setV('oi-sub','BTC Binance contracts');setDot('d-oi','ok')}
+    }catch{setDot('d-oi','err')}
+  }
+}
+
+// ── DXY (corrected formula) ───────────────────
+// DXY = 50.14348112 × EURUSD^-0.576 × USDJPY^0.136 × GBPUSD^-0.119
+//       × USDCAD^0.091 × USDSEK^0.042 × USDCHF^0.036
+async function fetchDXY(){
+  try{
+    const r=await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
+    const d=await r.json();
+    if(!d.usd)throw new Error();
+    const u=d.usd;
+    // EURUSD = 1/usd.eur  (usd.eur = how many EUR per 1 USD → invert for EUR/USD)
+    // GBPUSD = 1/usd.gbp
+    // USDJPY = usd.jpy, USDCAD = usd.cad, USDSEK = usd.sek, USDCHF = usd.chf
+    const EURUSD=1/u.eur, USDJPY=u.jpy, GBPUSD=1/u.gbp;
+    const USDCAD=u.cad, USDSEK=u.sek, USDCHF=u.chf;
+    const dxy=50.14348112*
+      Math.pow(EURUSD,-0.576)*Math.pow(USDJPY,0.136)*Math.pow(GBPUSD,-0.119)*
+      Math.pow(USDCAD,0.091)*Math.pow(USDSEK,0.042)*Math.pow(USDCHF,0.036);
+    S.dxy=parseFloat(dxy.toFixed(2));
+    const dir=S.dxy<99?'up':S.dxy<99.5?'up':'dn';
+    const sub=S.dxy<99?'Below 99 — BTC bullish':S.dxy<99.5?'Failing $99.50 — bullish':'Above $99.50';
+    setV('dxy-val',S.dxy.toFixed(2),dir); setV('dxy-sub',sub,dir);
+    tapSet('t-dxy',S.dxy.toFixed(2)); setDot('d-dxy','ok');
+    updateComposite();
+  }catch{setDot('d-dxy','err')}
+}
+
+// ── GOLD ──────────────────────────────────────
+async function fetchGold(){
+  try{
+    const r=await fetch('https://api.gold-api.com/price/XAU');
+    const d=await r.json();
+    if(!d.price||d.price<100)throw new Error();
+    S.gold=d.price;
+    const dir=(d.ch||0)>=0?'up':'dn';
+    setV('gold-val','$'+Math.round(d.price).toLocaleString(),dir);
+    setV('gold-sub',fmtP(d.chp||0)+' today',dir);
+    tapSet('t-gold','$'+Math.round(d.price).toLocaleString());
+    setDot('d-gold','ok'); setConn('c-rest','ok');
+    updateComposite();
+  }catch{setDot('d-gold','err')}
+}
+
+// ── CLAUDE PROXY ─────────────────────────────
+// Used for: 10Y yield, WTI, Brent, MSTR, STRC
+// Calls are sequential with gaps to respect rate limits
+async function claudeCall(prompt){
+  if(!_key)throw new Error('no-key');
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'content-type':'application/json',
+      'x-api-key':_key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({
+      model:'claude-haiku-4-5-20251001',
+      max_tokens:150,
+      tools:[{type:'web_search_20250305',name:'web_search'}],
+      system:'Financial data bot. Return ONLY compact valid JSON. No markdown. No explanation.',
+      messages:[{role:'user',content:prompt}]
+    })
+  });
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||'HTTP '+res.status)}
+  const d=await res.json();
+  return(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ');
+}
+function extractJSON(text){const m=text.match(/\{[^}]+\}/);return m?JSON.parse(m[0]):null}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+
+let proxyRunning=false;
+async function runProxySequence(){
+  if(proxyRunning)return;
+  if(!_key){
+    ['d-yield','d-wti','d-brent','d-mstr','d-strc'].forEach(d=>setDot(d,'err'));
+    return;
+  }
+  proxyRunning=true;
+
+  // Step 1: 10Y Yield
+  try{
+    const t=await claudeCall('Current US 10Y treasury yield %. JSON: {"y":4.41}');
+    const p=extractJSON(t);
+    const y=parseFloat(p?.y||p?.yield||p?.yield10y);
+    if(!isNaN(y)&&y>0&&y<20){
+      S.yield10y=y;
+      const dir=y>4.5?'dn':y>4.3?'neu':'up';
+      setV('yield-val',y.toFixed(2)+'%',dir);
+      setV('yield-sub',y>4.5?'⚠ ABOVE 4.50%':y>4.3?'Elevated — watch 4.50%':'Below 4.30%',dir);
+      tapSet('t-10y',y.toFixed(2)+'%'); setDot('d-yield','ok');
+    }
+  }catch(e){setDot('d-yield',e.message==='no-key'?'wait':'err')}
+
+  await sleep(10000); // wait 10s
+
+  // Step 2: WTI + Brent
+  try{
+    const t=await claudeCall('WTI and Brent crude oil price USD/barrel now. JSON: {"wti":89.40,"brent":96.80}');
+    const p=extractJSON(t);
+    if(p?.wti&&!isNaN(p.wti)){
+      S.wti=parseFloat(p.wti);
+      setV('wti-val','$'+S.wti.toFixed(2),'neu');
+      setV('wti-sub','Live · War premium','neu');
+      tapSet('t-wti','$'+S.wti.toFixed(2)); setDot('d-wti','ok');
+    }
+    if(p?.brent&&!isNaN(p.brent)){
+      S.brent=parseFloat(p.brent);
+      setV('brent-val','$'+S.brent.toFixed(2),'neu');
+      setV('brent-sub','Live · Global benchmark','neu');
+      setDot('d-brent','ok');
+    }
+  }catch(e){setDot('d-wti',e.message==='no-key'?'wait':'err');setDot('d-brent',e.message==='no-key'?'wait':'err')}
+
+  await sleep(10000); // wait 10s
+
+  // Step 3: MSTR + STRC
+  try{
+    const t=await claudeCall('Current Nasdaq stock prices MSTR and STRC. JSON: {"MSTR":139.50,"STRC":99.94}');
+    const p=extractJSON(t);
+    if(p?.MSTR&&!isNaN(p.MSTR)){
+      S.mstr=parseFloat(p.MSTR);
+      setV('mstr-val','$'+S.mstr.toFixed(2),'neu');
+      setV('mstr-sub','Live · Claude proxy','mut');
+      setDot('d-mstr','ok');
+    }
+    if(p?.STRC&&!isNaN(p.STRC)&&!S.strcManual){
+      S.strc=parseFloat(p.STRC); renderSTRC(); setDot('d-strc','ok');
+    }
+  }catch(e){
+    setDot('d-mstr',e.message==='no-key'?'wait':'err');
+    if(!S.strc)setDot('d-strc',e.message==='no-key'?'wait':'err');
+  }
+
+  proxyRunning=false;
+  updateComposite();
+}
+
+// ── STRC ──────────────────────────────────────
+function renderSTRC(){
+  if(!S.strc)return;
+  const v=S.strc-100;
+  const dir=S.strc<99.5?'dn':S.strc>100.5?'up':'neu';
+  setV('strc-val','$'+S.strc.toFixed(2),dir);
+  setV('strc-sub','Below par — heavily shorted',dir);
+  setV('strc-par',(v>=0?'+':'')+Math.abs(v).toFixed(2)+' vs par',v>=0?'up':'dn');
+  setV('squeeze-lbl','Squeeze risk: '+(S.strc<99.5?'HIGH — shorts at max risk':S.strc<100?'MEDIUM':'LOW'),dir);
+  setDot('d-strc','ok');
+}
+function setSTRC(){
+  const v=parseFloat($('strc-inp')?.value);
+  if(isNaN(v)||v<=0)return;
+  S.strc=v; S.strcManual=true; renderSTRC();
+  $('strc-inp').value=''; updateComposite();
+}
+
+// ── SOH ───────────────────────────────────────
+function setSoH(status,sub,dir){
+  S.sohStatus=status;
+  setV('soh-val',status,dir); setV('soh-sub',sub,dir);
+  updateComposite();
+}
+
+// ── FLOAT ─────────────────────────────────────
+function updateFloat(){
+  const nv=parseInt($('float-input')?.value);
+  const of=parseInt($('outflow-input')?.value);
+  if(!isNaN(nv)&&nv>0)S.floatVal=nv;
+  if(!isNaN(of)&&of>0)S.todayOutflow=of;
+  renderFloat();
+  S.floatTs=new Date();
+  const t=S.floatTs;
+  const ts=String(t.getUTCHours()).padStart(2,'0')+':'+String(t.getUTCMinutes()).padStart(2,'0')+' UTC';
+  setV('float-ts','Updated '+ts,'mut');
+  if($('float-input'))$('float-input').value='';
+  if($('outflow-input'))$('outflow-input').value='';
+  updateComposite();
+}
+function renderFloat(){
+  const pct=(S.floatVal/S.floatPeak*100).toFixed(1);
+  setV('float-val',S.floatVal.toLocaleString()+' BTC','dn');
+  setV('float-pct',pct+'%','dn');
+  setV('float-delta','▼ '+S.todayOutflow.toLocaleString()+' BTC today · ▼ '+Math.round(S.floatPeak-S.floatVal).toLocaleString()+' from peak','dn');
+  setV('float-rate','-'+S.todayOutflow.toLocaleString()+' BTC/day','dn');
+  setV('float-result','~'+S.floatVal.toLocaleString()+' BTC','up');
+  const fb=$('float-bar'); if(fb)fb.style.width=pct+'%';
+}
+function updateS2E(){
+  if(!S.bnPrice)return;
+  const btcUsd=(S.floatVal*S.bnPrice/1e9).toFixed(1);
+  const s2e=(28.6/parseFloat(btcUsd)).toFixed(2);
+  setV('s2e-val',s2e+'x',parseFloat(s2e)>3?'up':'neu');
+}
+
+// ── API KEY ───────────────────────────────────
+function saveKey(){
+  const v=$('key-inp')?.value.trim();
+  if(!v)return;
+  _key=v; sessionStorage.setItem('btc_key',_key);
+  $('key-inp').value='';
+  setV('key-status','Key saved ✓ — fetching data...','up');
+  $('key-status').style.color='var(--green)';
+  runProxySequence();
+}
+
+// ── COMPOSITE SCORE ───────────────────────────
+const SIGNALS=[
+  {id:'float',name:'Tradeable float compression',dir:()=>S.floatVal<500000?'up':S.floatVal<750000?'neu':'dn',val:()=>S.floatVal.toLocaleString()+' BTC'},
+  {id:'fund',name:'Perpetual funding rate',dir:()=>S.fundRate!==null?(S.fundRate<-0.0005?'up':S.fundRate>0.001?'dn':'neu'):'neu',val:()=>S.fundRate!==null?(S.fundRate*100).toFixed(4)+'%':'--'},
+  {id:'fg',name:'Fear & Greed Index',dir:()=>S.fg!==null?(S.fg<=20?'up':S.fg>=75?'dn':'neu'):'neu',val:()=>S.fg!==null?S.fg+'/100 — '+(S.fgLbl||''):'--'},
+  {id:'rsi',name:'RSI (14-day)',dir:()=>S.rsi!==null?(S.rsi<=30?'up':S.rsi>=70?'dn':'neu'):'neu',val:()=>S.rsi!==null?S.rsi.toString():'--'},
+  {id:'prem',name:'Coinbase premium vs Binance',dir:()=>(S.cbPrice&&S.bnPrice)?(S.cbPrice>S.bnPrice?'up':'neu'):'neu',val:()=>(S.cbPrice&&S.bnPrice)?'$'+Math.round(S.cbPrice-S.bnPrice):'--'},
+  {id:'dxy',name:'DXY failing $99.50 resistance',dir:()=>S.dxy?(S.dxy<99.5?'up':'dn'):'neu',val:()=>S.dxy?S.dxy.toFixed(2):'--'},
+  {id:'yield',name:'10Y yield vs 4.50% level',dir:()=>S.yield10y?(S.yield10y>4.5?'dn':S.yield10y>4.3?'neu':'up'):'neu',val:()=>S.yield10y?S.yield10y.toFixed(2)+'%':'--'},
+  {id:'strc',name:'STRC below par — squeeze coiling',dir:()=>S.strc?(S.strc<100?'up':'neu'):'neu',val:()=>S.strc?'$'+S.strc.toFixed(2):'--'},
+  {id:'msbt',name:'MSBT custody pre-seeding',dir:()=>'up',val:()=>'~45k BTC vaulted'},
+  {id:'atm',name:'Strategy $42B ATM reloaded',dir:()=>'up',val:()=>'762,099 BTC held'},
+  {id:'s2e',name:'S2E dry powder elevated',dir:()=>'up',val:()=>'4.72x stables vs BTC float'},
+  {id:'outflow',name:'24h exchange netflow outflow',dir:()=>'up',val:()=>'-'+S.todayOutflow.toLocaleString()+' BTC today'},
+];
+function updateComposite(){
+  const dirs=SIGNALS.map(s=>s.dir());
+  const bulls=dirs.filter(d=>d==='up').length;
+  const score=(bulls/SIGNALS.length*10).toFixed(1);
+  const dir=bulls>=8?'up':bulls>=5?'neu':'dn';
+  setV('comp-num',score,dir);
+  const desc=bulls>=10?'Maximum compression — supply shock imminent':
+             bulls>=8?'Strong convergence — highly bullish setup':
+             bulls>=6?'Moderate bullish signal':
+             bulls>=4?'Mixed — watch macro':'Reassess thesis';
+  setV('comp-desc',desc);
+  const pips=$('comp-pips');
+  if(pips)pips.innerHTML=dirs.map(d=>`<div class="pip" style="background:${d==='up'?'var(--green)':d==='dn'?'var(--red)':'var(--amber)'}"></div>`).join('');
+  const now=new Date();
+  setV('comp-ts',String(now.getUTCHours()).padStart(2,'0')+':'+String(now.getUTCMinutes()).padStart(2,'0')+':'+String(now.getUTCSeconds()).padStart(2,'0')+' UTC');
+  // Rebuild signal table
+  const tbl=$('sig-table');
+  if(tbl)tbl.innerHTML=SIGNALS.map(s=>{
+    const d=s.dir(),v=s.val();
+    return`<div class="sig-row"><span class="sig-name">${s.name}</span><span class="sig-val ${d==='up'?'up':d==='dn'?'dn':'neu'}">${v}</span><span class="badge ${d==='up'?'b-up':d==='dn'?'b-dn':'b-neu'}">${d==='up'?'BULL':d==='dn'?'BEAR':'WATCH'}</span></div>`;
+  }).join('');
+}
+
+// ── INIT ──────────────────────────────────────
+buildTape();
+renderFloat();
+updateComposite();
+
+// Set key status
+if(_key){
+  setV('key-status','Key loaded from session ✓','up');
+  $('key-status').style.color='var(--green)';
+}
+
+// Immediate fetches (no key needed)
+fetchBNREST();
+fetchFundREST();
+fetchRSI();
+fetchFearGreed=fetchFG; // alias
+fetchFG();
+setTimeout(fetchOI, 800);
+setTimeout(fetchDXY, 1000);
+setTimeout(fetchGold, 1500);
+
+// Start WebSockets
+setTimeout(connectBN, 300);
+setTimeout(connectOB, 500);
+setTimeout(connectFund, 700);
+setTimeout(connectCB, 900);
+
+// If key exists, run proxy sequence after non-proxy data loads
+if(_key) setTimeout(runProxySequence, 3000);
+
+// Poll intervals
+setInterval(fetchBNREST, 10000);
+setInterval(fetchFundREST, 30000);
+setInterval(fetchRSI, 300000);
+setInterval(fetchFG, 60000);
+setInterval(fetchOI, 120000);
+setInterval(fetchDXY, 120000);
+setInterval(fetchGold, 120000);
+setInterval(()=>{if(_key&&!proxyRunning)runProxySequence()}, 300000); // proxy every 5min
+</script>
+</body>
+</html>
