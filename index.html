@@ -117,6 +117,11 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
 .key-note{font-size:9px;color:var(--text2);line-height:1.6}
 
 .footer{padding:10px 16px;text-align:center;font-size:9px;color:var(--text2);border-top:1px solid var(--border);margin-top:8px}
+/* TOOLTIPS */
+.has-tip{cursor:help}
+.info-ic{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;margin-left:5px;border:1px solid var(--text2);border-radius:50%;font-size:8px;font-style:italic;font-family:Georgia,'Times New Roman',serif;text-transform:none;color:var(--text2);opacity:.65;transition:opacity .15s,color .15s,border-color .15s;line-height:1;vertical-align:middle;letter-spacing:0;flex:0 0 auto}
+.has-tip:hover .info-ic{opacity:1;color:var(--green);border-color:var(--green-border)}
+.tip-box{position:fixed;display:none;max-width:300px;background:#0a0d13;border:1px solid var(--border2);border-left:3px solid var(--green);border-radius:4px;padding:9px 11px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:400;line-height:1.5;color:var(--text0);text-transform:none;letter-spacing:0;z-index:9999;box-shadow:0 8px 28px rgba(0,0,0,.6);pointer-events:none}
 </style>
 </head>
 <body>
@@ -198,7 +203,7 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
     <div class="lbl">Funding Rate (Perp)</div>
     <div class="val sm" id="fund-val">--</div>
     <div class="sub" id="fund-desc">--</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-fund"></span>fstream.binance.com</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-fund"></span>CoinGecko · Bybit fallback</div>
   </div>
   <div class="card">
     <div class="lbl">Open Interest</div>
@@ -499,38 +504,47 @@ function connectOB(){
   }catch{setTimeout(connectOB,5000)}
 }
 
-// ── BINANCE FUNDING WS ───────────────────────
-let fundWs=null;
-function connectFund(){
-  try{
-    fundWs=new WebSocket('wss://fstream.binance.com/stream?streams=btcusdt@markPrice@1s');
-    fundWs.onopen=()=>setDot('d-fund','ok');
-    fundWs.onmessage=e=>{
-      const msg=JSON.parse(e.data); const d=msg.data||msg;
-      const rate=parseFloat(d.r); if(isNaN(rate))return;
-      S.fundRate=rate;
-      const pct=(rate*100).toFixed(4);
-      const ann=(rate*3*365*100).toFixed(1);
-      const dir=rate<-0.001?'dn':rate>0.001?'up':'neu';
-      const desc=rate<-0.001?'Shorts dominant — squeeze risk':rate>0.001?'Longs dominant':'Neutral';
-      setV('fund-val',pct+'% ('+ann+'% ann.)',dir); setV('fund-desc',desc,dir);
-      tapSet('t-fund',pct+'%'); setDot('d-fund','ok');
-    };
-    fundWs.onerror=()=>setDot('d-fund','err');
-    fundWs.onclose=()=>{setDot('d-fund','wait');setTimeout(connectFund,3000)};
-  }catch{setTimeout(connectFund,5000)}
+// ── FUNDING RATE (CORS-safe REST) ────────────
+// Binance futures endpoints (fstream/fapi) block browser CORS, so we pull
+// perp funding from CoinGecko (primary) with a Bybit fallback. Both are
+// CORS-permissive and need no API key. Rate is stored as a DECIMAL
+// (e.g. 0.0001 = 0.01%) so the composite-score logic stays unchanged.
+function renderFunding(rate){
+  if(rate===null||isNaN(rate))return;
+  S.fundRate=rate;
+  const pct=(rate*100).toFixed(4);
+  const ann=(rate*3*365*100).toFixed(1); // perp funds 3x/day
+  const dir=rate<-0.001?'dn':rate>0.001?'up':'neu';
+  const desc=rate<-0.001?'Shorts dominant — squeeze risk':rate>0.001?'Longs dominant':'Neutral positioning';
+  setV('fund-val',pct+'% ('+ann+'% ann.)',dir); setV('fund-desc',desc,dir);
+  tapSet('t-fund',pct+'%'); setDot('d-fund','ok'); updateComposite();
 }
-async function fetchFundREST(){
+async function fetchFunding(){
+  // Primary: CoinGecko /derivatives — funding_rate is a PERCENT, convert to decimal
   try{
-    const r=await fetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT');
-    const d=await r.json(); const rate=parseFloat(d.lastFundingRate);
-    if(isNaN(rate))return;
-    S.fundRate=rate;
-    const dir=rate<-0.001?'dn':rate>0.001?'up':'neu';
-    setV('fund-val',(rate*100).toFixed(4)+'%',dir);
-    setV('fund-desc',rate<-0.001?'Shorts dominant':rate>0.001?'Longs dominant':'Neutral',dir);
-    setDot('d-fund','ok');
-  }catch{}
+    const r=await fetch('https://api.coingecko.com/api/v3/derivatives?include_tickers=unexpired');
+    if(r.ok){
+      const data=await r.json();
+      if(Array.isArray(data)){
+        const cands=data.filter(x=>/binance/i.test(x.market||'')&&(x.index_id==='BTC'||x.base==='BTC')&&/usdt/i.test(x.symbol||'')&&x.funding_rate!=null);
+        const perp=cands.find(x=>x.contract_type==='perpetual')||cands[0];
+        if(perp&&perp.funding_rate!=null){
+          const rate=parseFloat(perp.funding_rate)/100;
+          if(!isNaN(rate)){renderFunding(rate);setConn('c-rest','ok');return;}
+        }
+      }
+    }
+  }catch(e){}
+  // Fallback: Bybit v5 — fundingRate is already a DECIMAL string
+  try{
+    const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT');
+    if(r.ok){
+      const d=await r.json();
+      const fr=d&&d.result&&d.result.list&&d.result.list[0]?d.result.list[0].fundingRate:null;
+      if(fr!=null&&!isNaN(parseFloat(fr))){renderFunding(parseFloat(fr));setConn('c-rest','ok');return;}
+    }
+  }catch(e){}
+  setDot('d-fund','err');
 }
 
 // ── COINBASE WS ──────────────────────────────
@@ -880,10 +894,88 @@ function updateComposite(){
   }).join('');
 }
 
+// ── METRIC TOOLTIPS ───────────────────────────
+// Keyed by exact label text. Each: what it is + why it's tracked.
+const TIPS={
+  "Composite Signal Score / 10":"A 0–10 roll-up of every signal below. Each votes bull, bear, or neutral; the score is the share that are bullish — a one-glance read on whether conditions are aligning.",
+  "Binance BTC/USDT":"Spot price on the world's highest-volume exchange — the global reference for BTC. It's the baseline that premiums and basis are measured against.",
+  "Coinbase BTC/USD":"Spot price on the largest US-regulated exchange, a proxy for American institutional demand. Trading above Binance (a 'Coinbase premium') signals US buying pressure.",
+  "Exchange Premiums":"The price gap between Coinbase and Binance. A positive Coinbase premium marks aggressive US/institutional accumulation; a negative gap means offshore/Asian demand is leading.",
+  "Bid / Ask Ratio":"Resting buy vs sell liquidity in the top 5 order-book levels. Above 1 = more bids than asks (support); below 1 = sellers stacked. A quick gauge of near-term order flow.",
+  "Fear / Greed":"A 0–100 sentiment composite of volatility, momentum, and volume. Used contrarily — extreme fear often marks local bottoms, extreme greed marks froth.",
+  "RSI (14-Day)":"Momentum on a 0–100 scale over 14 daily candles. Below 30 is oversold (bounce risk), above 70 is overbought (pullback risk).",
+  "Funding Rate (Perp)":"The periodic payment between perp longs and shorts that pins the perp price to spot. Positive = longs pay (crowded long); negative = shorts pay (crowded short, squeeze fuel). Reveals leveraged positioning.",
+  "Open Interest":"Total notional of open futures contracts. Rising OI into rising price = fresh conviction; rising OI into falling price = shorts building. Measures leverage in the system.",
+  "Tradeable Float — All Exchanges (Your Derived Model)":"Estimated BTC actually available to trade after removing ETF, corporate, and pre-seeded custody. The supply-shock core: a smaller float means demand moves price harder.",
+  "24h Exchange Netflow":"Net BTC flowing onto vs off exchanges. Outflows (coins leaving for custody) cut sell-side supply and are bullish; inflows are coins arriving to sell.",
+  "Strategy Holdings":"Total BTC held by Strategy (ex-MicroStrategy), the largest corporate holder. A bellwether for treasury adoption and a permanent sink that removes coin from float.",
+  "ETF Net Flows (Daily)":"Daily net creations across US spot BTC ETFs. A direct read on regulated institutional demand — sustained inflows pull coin into custody and tighten float.",
+  "New Stablecoin Mints (24h)":"Fresh USDT/USDC issued in 24h — 'dry powder' staged on-chain. Rising mints often precede BTC buying as that capital rotates in.",
+  "S2E Ratio — Stablecoins vs BTC":"Stablecoin supply relative to BTC's tradeable-float value. A higher ratio means more sidelined buying power per available coin — structurally bullish.",
+  "10Y Treasury Yield":"The global risk-free benchmark. Rising yields tighten financial conditions and pressure risk assets like BTC; falling yields ease them. Above ~4.5% is a headwind.",
+  "DXY Index":"The dollar against a basket of major currencies. BTC usually trades inversely — a weakening DXY, especially failing key levels, is a tailwind.",
+  "Gold Spot":"The legacy debasement hedge. Tracked as a correlation check — when gold and BTC rise together it signals a broad hard-asset bid, not crypto-only flows.",
+  "WTI Crude":"US oil benchmark, watched as an inflation input and geopolitical gauge. Oil spikes feed inflation fears that shape Fed policy and risk appetite.",
+  "Brent Crude":"The international oil benchmark vs WTI's US focus. Its level and the Brent–WTI spread flag global supply stress, especially around shipping chokepoints.",
+  "Strait of Hormuz Status":"Manual toggle for the world's key oil chokepoint (~20% of global supply). Restriction spikes oil and risk-off sentiment; resolution is risk-on — a discretionary macro overlay.",
+  "MSTR Share Price":"Strategy's stock, a leveraged BTC proxy via its holdings and ability to issue equity/debt to buy more. Often moves ahead of BTC and reflects equity-market appetite for Bitcoin.",
+  "STRC Share Price":"One of Strategy's preferred securities, tracked vs $100 par. Trading below par with heavy short interest sets up squeeze dynamics and signals stress in Strategy's capital stack.",
+  "STRC vs Par ($100)":"STRC's distance from its $100 redemption value. How far below par, plus short positioning, indicates squeeze risk and the cost of Strategy's preferred financing.",
+  "ATM Capacity":"Headroom in Strategy's at-the-market equity program — how much stock it can still sell to buy BTC. A loaded ATM means queued buy-side demand.",
+};
+let _tipBox=null,_tipEl=null;
+function initTooltips(){
+  _tipBox=document.createElement('div');
+  _tipBox.className='tip-box';
+  document.body.appendChild(_tipBox);
+  document.querySelectorAll('.lbl, .comp-label').forEach(el=>{
+    const key=el.textContent.trim();
+    const tip=TIPS[key];
+    if(!tip)return;
+    el.dataset.tip=tip;
+    el.classList.add('has-tip');
+    const ic=document.createElement('span');
+    ic.className='info-ic';
+    ic.textContent='i';
+    el.appendChild(ic);
+  });
+  // Desktop hover
+  document.addEventListener('mouseover',e=>{
+    const el=e.target.closest('[data-tip]');
+    if(el&&el!==_tipEl){_tipEl=el;showTip(el);}
+  });
+  document.addEventListener('mouseout',e=>{
+    const el=e.target.closest('[data-tip]');
+    if(el&&!el.contains(e.relatedTarget)){hideTip();}
+  });
+  // Touch / click toggle (mobile)
+  document.addEventListener('click',e=>{
+    const el=e.target.closest('[data-tip]');
+    if(el){ if(_tipBox.style.display==='block'&&_tipEl===el){hideTip();} else {_tipEl=el;showTip(el);} }
+    else hideTip();
+  });
+  window.addEventListener('scroll',hideTip,{passive:true});
+}
+function showTip(el){
+  _tipBox.textContent=el.dataset.tip;
+  _tipBox.style.display='block';
+  const r=el.getBoundingClientRect();
+  const w=_tipBox.offsetWidth,h=_tipBox.offsetHeight,pad=12;
+  let left=r.left;
+  if(left+w>window.innerWidth-pad)left=window.innerWidth-w-pad;
+  if(left<pad)left=pad;
+  let top=r.bottom+8;
+  if(top+h>window.innerHeight-pad&&r.top-h-8>pad)top=r.top-h-8;
+  _tipBox.style.left=left+'px';
+  _tipBox.style.top=top+'px';
+}
+function hideTip(){if(_tipBox){_tipBox.style.display='none';}_tipEl=null;}
+
 // ── INIT ──────────────────────────────────────
 buildTape();
 renderFloat();
 updateComposite();
+initTooltips();
 
 // Set key status
 if(_key){
@@ -893,7 +985,7 @@ if(_key){
 
 // Immediate fetches (no key needed)
 fetchBNREST();
-fetchFundREST();
+fetchFunding();
 fetchRSI();
 fetchFearGreed=fetchFG; // alias
 fetchFG();
@@ -904,7 +996,6 @@ setTimeout(fetchGold, 1500);
 // Start WebSockets
 setTimeout(connectBN, 300);
 setTimeout(connectOB, 500);
-setTimeout(connectFund, 700);
 setTimeout(connectCB, 900);
 
 // If key exists, run proxy sequence after non-proxy data loads
@@ -912,7 +1003,7 @@ if(_key) setTimeout(runProxySequence, 3000);
 
 // Poll intervals
 setInterval(fetchBNREST, 10000);
-setInterval(fetchFundREST, 30000);
+setInterval(fetchFunding, 60000);
 setInterval(fetchRSI, 300000);
 setInterval(fetchFG, 60000);
 setInterval(fetchOI, 120000);
