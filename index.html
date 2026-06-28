@@ -171,19 +171,19 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
     <div class="lbl">STRC Live</div>
     <div class="val lg" id="strctop-val">--</div>
     <div class="sub" id="strctop-sub">vs $100 par</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-strctop"></span>Stooq · proxy/manual fallback</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-strctop"></span>Yahoo · Stooq · manual</div>
   </div>
   <div class="card">
     <div class="lbl">DXY Index</div>
     <div class="val" id="dxy-val">--</div>
     <div class="sub" id="dxy-sub">Calculated from live FX</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-dxy"></span>fawazahmed0 currency API</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-dxy"></span>ICE DX-Y.NYB · FX fallback</div>
   </div>
   <div class="card">
     <div class="lbl">10Y Treasury Yield</div>
     <div class="val neu" id="yield-val">--</div>
     <div class="sub" id="yield-sub">API key needed ↓</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-yield"></span>Claude proxy</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-yield"></span>Yahoo ^TNX · proxy fallback</div>
   </div>
 </div>
 
@@ -426,7 +426,7 @@ const S = {
   fg:null, fgLbl:null,
   rsi:null,
   oi:null,
-  yield10y:null, dxy:null, gold:null, wti:null, brent:null,
+  yield10y:null, dxy:null, gold:null, goldChg:null, wti:null, brent:null,
   mstr:null, strc:null, strcManual:false,
   floatVal:408200, floatPeak:1100000, todayOutflow:12000,
   floatTs:null,
@@ -669,30 +669,90 @@ async function fetchOI(){
   }
 }
 
+// ── ARROW HELPER ──────────────────────────────
+function dayArrow(pct){
+  if(pct==null||isNaN(pct))return['','mut'];
+  if(pct>0)return['▲','up'];
+  if(pct<0)return['▼','dn'];
+  return['■','mut'];
+}
+// ── YAHOO QUOTE (no key) ──────────────────────
+// Real index/stock quotes from Yahoo's v8 chart endpoint. Tries direct,
+// then public CORS relays, so it works from GitHub Pages regardless of
+// Yahoo's CORS headers. Returns {price, prev, chgPct} or null.
+async function yahooQuote(symbol){
+  const path='v8/finance/chart/'+encodeURIComponent(symbol)+'?interval=1d&range=5d';
+  const direct='https://query1.finance.yahoo.com/'+path;
+  const urls=[direct,
+    'https://api.allorigins.win/raw?url='+encodeURIComponent(direct),
+    'https://corsproxy.io/?url='+encodeURIComponent(direct)];
+  for(const u of urls){
+    try{
+      const r=await fetch(u);
+      if(!r.ok)continue;
+      const j=await r.json();
+      const res=j&&j.chart&&j.chart.result&&j.chart.result[0];
+      const meta=res&&res.meta;
+      if(!meta||meta.regularMarketPrice==null)continue;
+      const price=parseFloat(meta.regularMarketPrice);
+      const prev=parseFloat(meta.chartPreviousClose!=null?meta.chartPreviousClose:meta.previousClose);
+      const chgPct=(prev&&!isNaN(prev))?((price-prev)/prev*100):null;
+      return{price,prev,chgPct};
+    }catch(e){}
+  }
+  return null;
+}
 // ── DXY (corrected formula) ───────────────────
 // DXY = 50.14348112 × EURUSD^-0.576 × USDJPY^0.136 × GBPUSD^-0.119
 //       × USDCAD^0.091 × USDSEK^0.042 × USDCHF^0.036
 async function fetchDXY(){
+  // Primary: real ICE Dollar Index (DX-Y.NYB) via Yahoo
+  const q=await yahooQuote('DX-Y.NYB');
+  if(q&&q.price>50&&q.price<200){
+    S.dxy=parseFloat(q.price.toFixed(2));
+    const [ar,cls]=dayArrow(q.chgPct);
+    setV('dxy-val',S.dxy.toFixed(2),'neu');
+    setV('dxy-sub',q.chgPct!=null?ar+' '+(q.chgPct>=0?'+':'')+q.chgPct.toFixed(2)+'% (24h)':'ICE close',cls);
+    tapSet('t-dxy',S.dxy.toFixed(2)); setDot('d-dxy','ok'); updateComposite();
+    return;
+  }
+  // Fallback: derive from live FX (less precise than the ICE print)
   try{
     const r=await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
     const d=await r.json();
     if(!d.usd)throw new Error();
     const u=d.usd;
-    // EURUSD = 1/usd.eur  (usd.eur = how many EUR per 1 USD → invert for EUR/USD)
-    // GBPUSD = 1/usd.gbp
-    // USDJPY = usd.jpy, USDCAD = usd.cad, USDSEK = usd.sek, USDCHF = usd.chf
     const EURUSD=1/u.eur, USDJPY=u.jpy, GBPUSD=1/u.gbp;
     const USDCAD=u.cad, USDSEK=u.sek, USDCHF=u.chf;
     const dxy=50.14348112*
       Math.pow(EURUSD,-0.576)*Math.pow(USDJPY,0.136)*Math.pow(GBPUSD,-0.119)*
       Math.pow(USDCAD,0.091)*Math.pow(USDSEK,0.042)*Math.pow(USDCHF,0.036);
     S.dxy=parseFloat(dxy.toFixed(2));
-    const dir=S.dxy<99?'up':S.dxy<99.5?'up':'dn';
-    const sub=S.dxy<99?'Below 99 — BTC bullish':S.dxy<99.5?'Failing $99.50 — bullish':'Above $99.50';
-    setV('dxy-val',S.dxy.toFixed(2),dir); setV('dxy-sub',sub,dir);
-    tapSet('t-dxy',S.dxy.toFixed(2)); setDot('d-dxy','ok');
-    updateComposite();
+    setV('dxy-val',S.dxy.toFixed(2),'neu');
+    setV('dxy-sub','≈ FX-derived (ICE feed down)','mut');
+    tapSet('t-dxy',S.dxy.toFixed(2)); setDot('d-dxy','ok'); updateComposite();
   }catch{setDot('d-dxy','err')}
+}
+// ── 10Y TREASURY YIELD (no key) ───────────────
+// CBOE 10Y yield index (^TNX) via Yahoo. Some feeds quote it x10, so
+// values >20 are scaled down. Falls back to the Claude proxy if present.
+async function fetch10Y(){
+  const q=await yahooQuote('^TNX');
+  if(q&&q.price!=null){
+    let y=parseFloat(q.price), p=(q.prev!=null?parseFloat(q.prev):NaN);
+    if(y>20)y/=10; if(p>20)p/=10;
+    if(y>0&&y<20){
+      S.yield10y=parseFloat(y.toFixed(2));
+      const dir=y>4.5?'dn':y>4.3?'neu':'up';
+      const bps=(!isNaN(p))?(y-p)*100:null;
+      const [ar,cls]=dayArrow(bps);
+      setV('yield-val',y.toFixed(2)+'%',dir);
+      setV('yield-sub',bps!=null?ar+' '+(bps>=0?'+':'')+bps.toFixed(1)+' bps (24h)':(y>4.5?'⚠ above 4.50%':y>4.3?'Elevated':'Below 4.30%'),cls);
+      tapSet('t-10y',y.toFixed(2)+'%'); setDot('d-yield','ok'); updateComposite();
+      return;
+    }
+  }
+  if(S.yield10y==null) setDot('d-yield', _key?'err':'wait');
 }
 
 // ── GOLD ──────────────────────────────────────
@@ -702,6 +762,7 @@ async function fetchGold(){
     const d=await r.json();
     if(!d.price||d.price<100)throw new Error();
     S.gold=d.price;
+    S.goldChg=(d.chp!=null&&!isNaN(parseFloat(d.chp)))?parseFloat(d.chp):null;
     const dir=(d.ch||0)>=0?'up':'dn';
     setV('gold-val','$'+Math.round(d.price).toLocaleString(),dir);
     setV('gold-sub',fmtP(d.chp||0)+' today',dir);
@@ -717,8 +778,15 @@ async function fetchGold(){
 function updateBtcGold(){
   if(!S.bnPrice||!S.gold)return;
   const r=S.bnPrice/S.gold;
-  setV('btcgold-val',r.toFixed(2)+' oz','neu');
-  setV('btcgold-sub','1 BTC = '+r.toFixed(2)+' oz gold','mut');
+  // Daily % change of the ratio from the two 24h moves: (1+btc%)/(1+gold%)-1
+  let chg=null;
+  if(S.bnChgPct!=null){
+    const gc=(S.goldChg!=null?S.goldChg:0)/100;
+    chg=((1+S.bnChgPct/100)/(1+gc)-1)*100;
+  }
+  const [ar,cls]=dayArrow(chg);
+  setV('btcgold-val',r.toFixed(2)+' oz',cls);
+  setV('btcgold-sub',chg!=null?ar+' '+(chg>=0?'+':'')+chg.toFixed(2)+'% (24h)':'1 BTC = '+r.toFixed(2)+' oz gold',cls);
   tapSet('t-btcgold',r.toFixed(2)+' oz');
   setDot('d-btcgold','ok');
 }
@@ -833,10 +901,14 @@ function renderSTRC(){
   setV('strctop-sub',(v>=0?'+':'')+v.toFixed(2)+' vs $100 par',v>=0?'up':'dn');
   setDot('d-strctop','ok');
 }
-// ── STRC LIVE (Stooq, no key) ─────────────────
-// EOD/intraday quote for STRC preferred. Manual entry (lower card) overrides.
+// ── STRC LIVE (no key) ────────────────────────
+// Yahoo quote first, then Stooq CSV. Manual entry (lower card) overrides both.
 async function fetchSTRCLive(){
   if(S.strcManual)return;
+  const q=await yahooQuote('STRC');
+  if(q&&q.price>0&&q.price<1000){
+    S.strc=parseFloat(q.price.toFixed(2)); renderSTRC(); updateComposite(); return;
+  }
   try{
     const r=await fetch('https://stooq.com/q/l/?s=strc.us&f=sd2t2ohlcv&h&e=csv');
     if(!r.ok)throw new Error('http '+r.status);
@@ -1044,6 +1116,7 @@ fetchFG();
 setTimeout(fetchOI, 800);
 setTimeout(fetchDXY, 1000);
 setTimeout(fetchSTRCLive, 1200);
+setTimeout(fetch10Y, 1300);
 setTimeout(fetchGold, 1500);
 setTimeout(updateBtcGold, 2000);
 
@@ -1062,6 +1135,7 @@ setInterval(fetchRSI, 300000);
 setInterval(fetchFG, 60000);
 setInterval(fetchOI, 120000);
 setInterval(fetchDXY, 120000);
+setInterval(fetch10Y, 120000);
 setInterval(fetchGold, 120000);
 setInterval(fetchSTRCLive, 120000);
 setInterval(()=>{if(_key&&!proxyRunning)runProxySequence()}, 300000); // proxy every 5min
