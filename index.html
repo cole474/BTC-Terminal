@@ -158,6 +158,35 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
   <div class="comp-updated" id="comp-ts">--</div>
 </div>
 
+<!-- KEY MACRO STRIP -->
+<div class="sec">Key Macro &amp; Ratios</div>
+<div class="g4">
+  <div class="card" id="card-btcgold">
+    <div class="lbl">BTC / Gold (BTCXAU)</div>
+    <div class="val lg neu" id="btcgold-val">--</div>
+    <div class="sub" id="btcgold-sub">BTC priced in gold</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-btcgold"></span>Binance &divide; gold-api</div>
+  </div>
+  <div class="card" id="card-strctop">
+    <div class="lbl">STRC Live</div>
+    <div class="val lg" id="strctop-val">--</div>
+    <div class="sub" id="strctop-sub">vs $100 par</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-strctop"></span>Stooq · proxy/manual fallback</div>
+  </div>
+  <div class="card">
+    <div class="lbl">DXY Index</div>
+    <div class="val" id="dxy-val">--</div>
+    <div class="sub" id="dxy-sub">Calculated from live FX</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-dxy"></span>fawazahmed0 currency API</div>
+  </div>
+  <div class="card">
+    <div class="lbl">10Y Treasury Yield</div>
+    <div class="val neu" id="yield-val">--</div>
+    <div class="sub" id="yield-sub">API key needed ↓</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-yield"></span>Claude proxy</div>
+  </div>
+</div>
+
 <!-- BTC PRICE & STRUCTURE -->
 <div class="sec">BTC Price & Market Structure</div>
 <div class="g4">
@@ -286,19 +315,7 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
 
 <!-- MACRO -->
 <div class="sec">Macro Overlay</div>
-<div class="g4">
-  <div class="card">
-    <div class="lbl">10Y Treasury Yield</div>
-    <div class="val neu" id="yield-val">--</div>
-    <div class="sub" id="yield-sub">API key needed ↓</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-yield"></span>Claude proxy</div>
-  </div>
-  <div class="card">
-    <div class="lbl">DXY Index</div>
-    <div class="val" id="dxy-val">--</div>
-    <div class="sub" id="dxy-sub">Calculated from live FX</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-dxy"></span>fawazahmed0 currency API</div>
-  </div>
+<div class="g2">
   <div class="card">
     <div class="lbl">Gold Spot</div>
     <div class="val" id="gold-val">--</div>
@@ -430,7 +447,7 @@ function flash(id,dir){const e=$(id);if(!e)return;e.classList.remove('flash-up',
 const TAPE_FIELDS = [
   ['BTC/USDT','t-bn'],['BTC/USD','t-cb'],['PREMIUM','t-prem'],
   ['FUNDING','t-fund'],['F&G','t-fg'],['10Y','t-10y'],
-  ['DXY','t-dxy'],['GOLD','t-gold'],['WTI','t-wti'],
+  ['DXY','t-dxy'],['GOLD','t-gold'],['WTI','t-wti'],['BTC/GOLD','t-btcgold'],
 ];
 function buildTape(){
   const inner = $('tape-inner');
@@ -465,7 +482,7 @@ function connectBN(){
       setV('bn-chg',fmtP(S.bnChgPct)+' 24h · H:$'+fmt(parseFloat(d.h))+' L:$'+fmt(parseFloat(d.l)),S.bnChgPct>=0?'up':'dn');
       tapSet('t-bn','$'+fmt(S.bnPrice)+'('+fmtP(S.bnChgPct)+')');
       if(prev&&S.bnPrice!==prev)flash('card-bn',S.bnPrice>prev?'up':'dn');
-      updatePremium(); updateComposite(); updateS2E();
+      updatePremium(); updateComposite(); updateS2E(); updateBtcGold();
     };
     bnWs.onerror=()=>{setConn('c-bn','err');setDot('d-bn','err');bnFails++};
     bnWs.onclose=()=>{setConn('c-bn','wait');setTimeout(connectBN,Math.min(3000*Math.pow(1.5,bnFails),15000));fetchBNREST()};
@@ -479,7 +496,7 @@ async function fetchBNREST(){
     setV('bn-price','$'+fmt(S.bnPrice),S.bnChgPct>=0?'up':'dn');
     setV('bn-chg',fmtP(S.bnChgPct)+' 24h',S.bnChgPct>=0?'up':'dn');
     tapSet('t-bn','$'+fmt(S.bnPrice));
-    setDot('d-bn','ok'); updatePremium(); updateComposite(); updateS2E();
+    setDot('d-bn','ok'); updatePremium(); updateComposite(); updateS2E(); updateBtcGold();
   }catch{}
 }
 
@@ -690,8 +707,20 @@ async function fetchGold(){
     setV('gold-sub',fmtP(d.chp||0)+' today',dir);
     tapSet('t-gold','$'+Math.round(d.price).toLocaleString());
     setDot('d-gold','ok'); setConn('c-rest','ok');
-    updateComposite();
+    updateComposite(); updateBtcGold();
   }catch{setDot('d-gold','err')}
+}
+
+// ── BTC / GOLD RATIO (BTCXAU) ─────────────────
+// Troy oz of gold one BTC buys = BTC_USD / XAU_USD.
+// Computed from data already on the dashboard — no new feed needed.
+function updateBtcGold(){
+  if(!S.bnPrice||!S.gold)return;
+  const r=S.bnPrice/S.gold;
+  setV('btcgold-val',r.toFixed(2)+' oz','neu');
+  setV('btcgold-sub','1 BTC = '+r.toFixed(2)+' oz gold','mut');
+  tapSet('t-btcgold',r.toFixed(2)+' oz');
+  setDot('d-btcgold','ok');
 }
 
 // ── CLAUDE PROXY ─────────────────────────────
@@ -799,6 +828,27 @@ function renderSTRC(){
   setV('strc-par',(v>=0?'+':'')+Math.abs(v).toFixed(2)+' vs par',v>=0?'up':'dn');
   setV('squeeze-lbl','Squeeze risk: '+(S.strc<99.5?'HIGH — shorts at max risk':S.strc<100?'MEDIUM':'LOW'),dir);
   setDot('d-strc','ok');
+  // top-strip mirror
+  setV('strctop-val','$'+S.strc.toFixed(2),dir);
+  setV('strctop-sub',(v>=0?'+':'')+v.toFixed(2)+' vs $100 par',v>=0?'up':'dn');
+  setDot('d-strctop','ok');
+}
+// ── STRC LIVE (Stooq, no key) ─────────────────
+// EOD/intraday quote for STRC preferred. Manual entry (lower card) overrides.
+async function fetchSTRCLive(){
+  if(S.strcManual)return;
+  try{
+    const r=await fetch('https://stooq.com/q/l/?s=strc.us&f=sd2t2ohlcv&h&e=csv');
+    if(!r.ok)throw new Error('http '+r.status);
+    const lines=(await r.text()).trim().split(/\r?\n/);
+    if(lines.length<2)throw new Error('no rows');
+    const c=lines[1].split(','); // Symbol,Date,Time,Open,High,Low,Close,Volume
+    const close=parseFloat(c[6]);
+    if(isNaN(close)||close<=0)throw new Error('no quote');
+    S.strc=close; renderSTRC(); updateComposite();
+  }catch(e){
+    if(!S.strc)setDot('d-strctop','wait'); // proxy/manual may still fill it
+  }
 }
 function setSTRC(){
   const v=parseFloat($('strc-inp')?.value);
@@ -898,6 +948,8 @@ function updateComposite(){
 // Keyed by exact label text. Each: what it is + why it's tracked.
 const TIPS={
   "Composite Signal Score / 10":"A 0–10 roll-up of every signal below. Each votes bull, bear, or neutral; the score is the share that are bullish — a one-glance read on whether conditions are aligning.",
+  "BTC / Gold (BTCXAU)":"How many troy ounces of gold one bitcoin buys (BTC price ÷ gold spot). Strips out dollar debasement to show BTC's performance against the oldest hard money — rising = BTC outpacing gold.",
+  "STRC Live":"Strategy's STRC preferred, designed to trade near its $100 par. Distance from par plus short interest signals squeeze risk and the health of Strategy's preferred-equity financing.",
   "Binance BTC/USDT":"Spot price on the world's highest-volume exchange — the global reference for BTC. It's the baseline that premiums and basis are measured against.",
   "Coinbase BTC/USD":"Spot price on the largest US-regulated exchange, a proxy for American institutional demand. Trading above Binance (a 'Coinbase premium') signals US buying pressure.",
   "Exchange Premiums":"The price gap between Coinbase and Binance. A positive Coinbase premium marks aggressive US/institutional accumulation; a negative gap means offshore/Asian demand is leading.",
@@ -991,7 +1043,9 @@ fetchFearGreed=fetchFG; // alias
 fetchFG();
 setTimeout(fetchOI, 800);
 setTimeout(fetchDXY, 1000);
+setTimeout(fetchSTRCLive, 1200);
 setTimeout(fetchGold, 1500);
+setTimeout(updateBtcGold, 2000);
 
 // Start WebSockets
 setTimeout(connectBN, 300);
@@ -1009,6 +1063,7 @@ setInterval(fetchFG, 60000);
 setInterval(fetchOI, 120000);
 setInterval(fetchDXY, 120000);
 setInterval(fetchGold, 120000);
+setInterval(fetchSTRCLive, 120000);
 setInterval(()=>{if(_key&&!proxyRunning)runProxySequence()}, 300000); // proxy every 5min
 </script>
 </body>
