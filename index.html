@@ -160,7 +160,7 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
 
 <!-- KEY MACRO STRIP -->
 <div class="sec">Key Macro &amp; Ratios</div>
-<div class="g4">
+<div class="g5">
   <div class="card" id="card-btcgold">
     <div class="lbl">BTC / Gold (BTCXAU)</div>
     <div class="val lg neu" id="btcgold-val">--</div>
@@ -178,6 +178,12 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
     <div class="val" id="dxy-val">--</div>
     <div class="sub" id="dxy-sub">Calculated from live FX</div>
     <div class="src"><span class="sdot sdot-wait" id="d-dxy"></span>ICE DX-Y.NYB · FX fallback</div>
+  </div>
+  <div class="card">
+    <div class="lbl">USD/JPY (Carry)</div>
+    <div class="val" id="jpy-val">--</div>
+    <div class="sub" id="jpy-sub">Yen carry monitor</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-jpy"></span>Yahoo USDJPY=X · FX fallback</div>
   </div>
   <div class="card">
     <div class="lbl">10Y Treasury Yield</div>
@@ -243,73 +249,37 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
 </div>
 
 <!-- SUPPLY COMPRESSION -->
-<div class="sec">Supply Compression Model — Manual</div>
-<div class="card">
-  <div style="display:grid;grid-template-columns:1fr auto;align-items:start;gap:12px;margin-bottom:10px">
+<div class="sec">Institutional Supply Absorption</div>
+<div class="g3">
+  <div class="card" id="card-etfhold">
+    <div class="lbl">US Spot ETF Holdings</div>
+    <div class="val lg" id="etf-hold-val">--</div>
+    <div class="sub" id="etf-hold-sub">Loading…</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-etf"></span>bitcointreasuries.com · via relay</div>
+  </div>
+  <div class="card" id="card-etfflow">
+    <div class="lbl">ETF Net Flow (latest day)</div>
+    <div class="val lg" id="etf-flow-val">--</div>
+    <div class="sub" id="etf-flow-sub">Loading…</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-etfflow"></span>bitcointreasuries.com · via relay</div>
+  </div>
+  <div class="card" id="card-mstrhold">
+    <div class="lbl">Strategy (MSTR) Holdings</div>
+    <div class="val lg" id="mstr-hold-val">--</div>
+    <div class="sub" id="mstr-hold-sub">Loading…</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-mstrhold"></span>bitcointreasuries.com · via relay</div>
+  </div>
+</div>
+<div class="card" id="card-sink" style="margin-top:8px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
     <div>
-      <div class="lbl">Tradeable Float — All Exchanges (Your Derived Model)</div>
-      <div class="val dn" style="font-size:28px" id="float-val">408,200 BTC</div>
-      <div class="sub dn" id="float-delta">Enter today's outflow and hit Update</div>
+      <div class="lbl">Total Institutional Sink (ETFs + Strategy)</div>
+      <div class="sub mut">BTC held off the tradeable market by US spot ETFs and Strategy combined</div>
     </div>
     <div style="text-align:right">
-      <div class="lbl">% of Mar 10 Peak</div>
-      <div class="val sm dn" id="float-pct">37.1%</div>
-      <div class="lbl" style="margin-top:6px">Rate</div>
-      <div class="val sm dn" id="float-rate">--</div>
+      <div class="val" id="sink-val">--</div>
+      <div class="sub" id="sink-sub">--</div>
     </div>
-  </div>
-  <div class="float-bar-track"><div class="float-bar-fill" id="float-bar" style="width:37.1%"></div></div>
-  <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text2);margin-bottom:10px">
-    <span>0</span><span>1.1M (Mar 10 peak)</span>
-  </div>
-  <div style="margin-bottom:8px;font-size:9px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase">Deduction Model</div>
-  <div class="deduct-row"><span style="color:var(--text1)">Gross exchange reserves</span><span class="mut">2,350,000 BTC</span></div>
-  <div class="deduct-row"><span style="color:var(--text1)">ETF custodial (IBIT, FBTC, ARKB...)</span><span class="dn">− 1,300,000 BTC</span></div>
-  <div class="deduct-row"><span style="color:var(--text1)">Corporate treasury (MSTR 762k+)</span><span class="dn">− 880,000 BTC</span></div>
-  <div class="deduct-row"><span style="color:var(--text1)">MSBT pre-seed custody migration</span><span class="dn">− ~45,000 BTC</span></div>
-  <div class="deduct-row"><span style="color:var(--text0);font-weight:500">Tradeable float</span><span class="up" id="float-result">~408,200 BTC</span></div>
-  <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
-    <span style="color:var(--text2);font-size:10px">Update:</span>
-    <input class="inp" id="float-input" type="number" placeholder="New float (e.g. 401000)" style="width:180px">
-    <input class="inp" id="outflow-input" type="number" placeholder="Today's outflow" style="width:150px">
-    <button class="btn" onclick="updateFloat()">Update Float</button>
-    <span style="font-size:9px;color:var(--text2)" id="float-ts">not yet updated</span>
-  </div>
-</div>
-
-<div class="g3">
-  <div class="card">
-    <div class="lbl">24h Exchange Netflow</div>
-    <div class="val sm dn" id="netflow-val">-12,000 BTC</div>
-    <div class="sub dn">Net outflow → bullish</div>
-  </div>
-  <div class="card">
-    <div class="lbl">Strategy Holdings</div>
-    <div class="val sm up">762,099 BTC</div>
-    <div class="sub mut">+43,346 BTC in Q1 · $42B ATM reloaded</div>
-  </div>
-  <div class="card">
-    <div class="lbl">ETF Net Flows (Daily)</div>
-    <div class="val sm" id="etf-val">+$312M</div>
-    <div class="sub up">Net inflow · IBIT leading</div>
-  </div>
-</div>
-
-<!-- STABLECOIN FLOWS -->
-<div class="sec">Stablecoin Flows & Dry Powder</div>
-<div class="g2">
-  <div class="card">
-    <div class="lbl">New Stablecoin Mints (24h)</div>
-    <div class="val sm up">+$1.84B</div>
-    <div style="margin-top:8px">
-      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bg2);font-size:10px"><span class="mut">USDT</span><span class="up">+$1.20B</span></div>
-      <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:10px"><span class="mut">USDC</span><span class="up">+$640M</span></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="lbl">S2E Ratio — Stablecoins vs BTC</div>
-    <div class="val sm up" id="s2e-val">4.72x</div>
-    <div class="sub up">Elevated dry powder → structural buy pressure</div>
   </div>
 </div>
 
@@ -426,8 +396,9 @@ const S = {
   fg:null, fgLbl:null,
   rsi:null,
   oi:null,
-  yield10y:null, dxy:null, gold:null, goldChg:null, wti:null, brent:null,
+  yield10y:null, dxy:null, jpy:null, gold:null, goldChg:null, wti:null, brent:null,
   mstr:null, strc:null, strcManual:false,
+  etfHold:null, etfAum:null, etfFlow:null, etfFlowDate:null, mstrHold:null,
   floatVal:408200, floatPeak:1100000, todayOutflow:12000,
   floatTs:null,
   sohStatus:'RESTRICTED',
@@ -447,7 +418,7 @@ function flash(id,dir){const e=$(id);if(!e)return;e.classList.remove('flash-up',
 const TAPE_FIELDS = [
   ['BTC/USDT','t-bn'],['BTC/USD','t-cb'],['PREMIUM','t-prem'],
   ['FUNDING','t-fund'],['F&G','t-fg'],['10Y','t-10y'],
-  ['DXY','t-dxy'],['GOLD','t-gold'],['WTI','t-wti'],['BTC/GOLD','t-btcgold'],
+  ['DXY','t-dxy'],['USD/JPY','t-jpy'],['GOLD','t-gold'],['WTI','t-wti'],['BTC/GOLD','t-btcgold'],
 ];
 function buildTape(){
   const inner = $('tape-inner');
@@ -755,6 +726,28 @@ async function fetch10Y(){
   if(S.yield10y==null) setDot('d-yield', _key?'err':'wait');
 }
 
+// ── USD/JPY (yen carry monitor, no key) ───────
+async function fetchJPY(){
+  const q=await yahooQuote('USDJPY=X');
+  if(q&&q.price>50&&q.price<300){
+    S.jpy=parseFloat(q.price.toFixed(2));
+    const [ar,cls]=dayArrow(q.chgPct);
+    setV('jpy-val','¥'+S.jpy.toFixed(2),cls);
+    setV('jpy-sub',q.chgPct!=null?ar+' '+(q.chgPct>=0?'+':'')+q.chgPct.toFixed(2)+'% (24h)':'USD/JPY',cls);
+    tapSet('t-jpy','¥'+S.jpy.toFixed(2)); setDot('d-jpy','ok'); updateComposite();
+    return;
+  }
+  try{
+    const r=await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
+    const d=await r.json();
+    const j=d&&d.usd&&d.usd.jpy;
+    if(!j)throw new Error();
+    S.jpy=parseFloat(parseFloat(j).toFixed(2));
+    setV('jpy-val','¥'+S.jpy.toFixed(2),'neu');
+    setV('jpy-sub','USD/JPY · live FX','mut');
+    tapSet('t-jpy','¥'+S.jpy.toFixed(2)); setDot('d-jpy','ok'); updateComposite();
+  }catch{setDot('d-jpy','err')}
+}
 // ── GOLD ──────────────────────────────────────
 async function fetchGold(){
   try{
@@ -791,6 +784,85 @@ function updateBtcGold(){
   setDot('d-btcgold','ok');
 }
 
+// ── INSTITUTIONAL ABSORPTION (bitcointreasuries.com, no key, via CORS relay) ─
+async function corsText(url){
+  const relays=[
+    'https://api.allorigins.win/raw?url='+encodeURIComponent(url),
+    'https://corsproxy.io/?url='+encodeURIComponent(url)
+  ];
+  for(const u of relays){
+    try{const r=await fetch(u);if(r.ok){const t=await r.text();if(t&&t.length>300)return t;}}catch(e){}
+  }
+  return null;
+}
+function _maxBTC(html){
+  const txt=html.replace(/<[^>]+>/g,' ').replace(/\$\s*[0-9][0-9,]*(?:\.[0-9]+)?/g,' ');
+  const arr=[...txt.matchAll(/\b(\d{1,3}(?:,\d{3})+(?:\.\d+)?)\b/g)].map(m=>parseFloat(m[1].replace(/,/g,''))).filter(n=>n>0&&n<21000000);
+  return arr.length?Math.max(...arr):null;
+}
+function _maxUSD(html){
+  const arr=[...html.replace(/<[^>]+>/g,' ').matchAll(/\$\s*([0-9][0-9,]{6,}(?:\.[0-9]+)?)/g)].map(m=>parseFloat(m[1].replace(/,/g,''))).filter(n=>n>0);
+  return arr.length?Math.max(...arr):null;
+}
+async function fetchETFHoldings(){
+  const html=await corsText('https://bitbo.io/treasuries/us-etfs/');
+  if(!html){if(S.etfHold==null)setDot('d-etf','wait');return;}
+  const btc=_maxBTC(html), usd=_maxUSD(html);
+  if(btc&&btc>100000){
+    S.etfHold=btc; S.etfAum=usd;
+    const pct=(btc/21e6*100).toFixed(2);
+    setV('etf-hold-val',Math.round(btc).toLocaleString()+' BTC','up');
+    setV('etf-hold-sub',(usd?'$'+(usd/1e9).toFixed(1)+'B AUM · ':'')+pct+'% of 21M supply','mut');
+    setDot('d-etf','ok'); updateSink(); updateComposite();
+  }else if(S.etfHold==null){setDot('d-etf','err');}
+}
+async function fetchETFFlow(){
+  const html=await corsText('https://bitbo.io/treasuries/etf-flows/');
+  if(!html){if(S.etfFlow==null)setDot('d-etfflow','wait');return;}
+  const txt=html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+  const dates=[...txt.matchAll(/([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})/g)];
+  for(let k=0;k<dates.length;k++){
+    const start=dates[k].index+dates[k][0].length;
+    const end=(k+1<dates.length)?dates[k+1].index:start+240;
+    const nums=txt.slice(start,end).match(/-?\d+(?:\.\d+)?/g);
+    if(nums&&nums.length>=5){
+      const flow=parseFloat(nums[nums.length-1]);
+      if(!isNaN(flow)){
+        S.etfFlow=flow; S.etfFlowDate=dates[k][0];
+        const [ar,cls]=dayArrow(flow);
+        setV('etf-flow-val',(ar?ar+' ':'')+'$'+Math.abs(flow).toFixed(0)+'M',cls);
+        setV('etf-flow-sub',(flow>=0?'net inflow · ':'net outflow · ')+dates[k][0],cls);
+        setDot('d-etfflow','ok'); updateComposite();
+        return;
+      }
+    }
+  }
+  if(S.etfFlow==null)setDot('d-etfflow','err');
+}
+async function fetchMSTRHoldings(){
+  const html=await corsText('https://bitbo.io/treasuries/microstrategy/');
+  if(!html){if(S.mstrHold==null)setDot('d-mstrhold','wait');return;}
+  const btc=_maxBTC(html);
+  if(btc&&btc>100000){
+    S.mstrHold=btc;
+    const pct=(btc/21e6*100).toFixed(2);
+    const usd=S.bnPrice?' · $'+(btc*S.bnPrice/1e9).toFixed(1)+'B':'';
+    setV('mstr-hold-val',Math.round(btc).toLocaleString()+' BTC','up');
+    setV('mstr-hold-sub',pct+'% of 21M'+usd,'mut');
+    setDot('d-mstrhold','ok'); updateSink(); updateComposite();
+  }else if(S.mstrHold==null){setDot('d-mstrhold','err');}
+}
+function updateSink(){
+  if(S.etfHold==null&&S.mstrHold==null)return;
+  const tot=(S.etfHold||0)+(S.mstrHold||0);
+  setV('sink-val',Math.round(tot).toLocaleString()+' BTC','up');
+  setV('sink-sub',(tot/21e6*100).toFixed(1)+'% of all 21M BTC','mut');
+}
+async function fetchAbsorption(){
+  await fetchETFHoldings(); await sleep(500);
+  await fetchETFFlow(); await sleep(500);
+  await fetchMSTRHoldings();
+}
 // ── CLAUDE PROXY ─────────────────────────────
 // Used for: 10Y yield, WTI, Brent, MSTR, STRC
 // Calls are sequential with gaps to respect rate limits
@@ -980,7 +1052,7 @@ function saveKey(){
 
 // ── COMPOSITE SCORE ───────────────────────────
 const SIGNALS=[
-  {id:'float',name:'Tradeable float compression',dir:()=>S.floatVal<500000?'up':S.floatVal<750000?'neu':'dn',val:()=>S.floatVal.toLocaleString()+' BTC'},
+  {id:'etfflow',name:'US spot ETF net flow (latest)',dir:()=>S.etfFlow!=null?(S.etfFlow>0?'up':S.etfFlow<0?'dn':'neu'):'neu',val:()=>S.etfFlow!=null?('$'+Math.round(S.etfFlow)+'M'):'--'},
   {id:'fund',name:'Perpetual funding rate',dir:()=>S.fundRate!==null?(S.fundRate<-0.0005?'up':S.fundRate>0.001?'dn':'neu'):'neu',val:()=>S.fundRate!==null?(S.fundRate*100).toFixed(4)+'%':'--'},
   {id:'fg',name:'Fear & Greed Index',dir:()=>S.fg!==null?(S.fg<=20?'up':S.fg>=75?'dn':'neu'):'neu',val:()=>S.fg!==null?S.fg+'/100 — '+(S.fgLbl||''):'--'},
   {id:'rsi',name:'RSI (14-day)',dir:()=>S.rsi!==null?(S.rsi<=30?'up':S.rsi>=70?'dn':'neu'):'neu',val:()=>S.rsi!==null?S.rsi.toString():'--'},
@@ -989,9 +1061,7 @@ const SIGNALS=[
   {id:'yield',name:'10Y yield vs 4.50% level',dir:()=>S.yield10y?(S.yield10y>4.5?'dn':S.yield10y>4.3?'neu':'up'):'neu',val:()=>S.yield10y?S.yield10y.toFixed(2)+'%':'--'},
   {id:'strc',name:'STRC below par — squeeze coiling',dir:()=>S.strc?(S.strc<100?'up':'neu'):'neu',val:()=>S.strc?'$'+S.strc.toFixed(2):'--'},
   {id:'msbt',name:'MSBT custody pre-seeding',dir:()=>'up',val:()=>'~45k BTC vaulted'},
-  {id:'atm',name:'Strategy $42B ATM reloaded',dir:()=>'up',val:()=>'762,099 BTC held'},
-  {id:'s2e',name:'S2E dry powder elevated',dir:()=>'up',val:()=>'4.72x stables vs BTC float'},
-  {id:'outflow',name:'24h exchange netflow outflow',dir:()=>'up',val:()=>'-'+S.todayOutflow.toLocaleString()+' BTC today'},
+  {id:'atm',name:'Strategy BTC accumulation',dir:()=>'up',val:()=>S.mstrHold?S.mstrHold.toLocaleString()+' BTC held':'--'},
 ];
 function updateComposite(){
   const dirs=SIGNALS.map(s=>s.dir());
@@ -1019,6 +1089,10 @@ function updateComposite(){
 // ── METRIC TOOLTIPS ───────────────────────────
 // Keyed by exact label text. Each: what it is + why it's tracked.
 const TIPS={
+  "US Spot ETF Holdings":"Total BTC held by all US spot Bitcoin ETFs (IBIT, FBTC, GBTC…), pulled live from BitcoinTreasuries.com. Coin in ETF custody is effectively out of tradeable float — the core absorption signal.",
+  "ETF Net Flow (latest day)":"Net USD created (inflow) or redeemed (outflow) across US spot BTC ETFs on the latest trading day. Inflows pull coin into custody (bullish); sustained outflows release it back (bearish).",
+  "Strategy (MSTR) Holdings":"Total BTC on Strategy's (ex-MicroStrategy) balance sheet, live from BitcoinTreasuries.com. The largest corporate holder and a near-permanent sink that keeps accumulating.",
+  "Total Institutional Sink (ETFs + Strategy)":"US spot ETF holdings plus Strategy's stack — combined BTC locked away from the tradeable market, shown as a share of the 21M cap.",
   "Composite Signal Score / 10":"A 0–10 roll-up of every signal below. Each votes bull, bear, or neutral; the score is the share that are bullish — a one-glance read on whether conditions are aligning.",
   "BTC / Gold (BTCXAU)":"How many troy ounces of gold one bitcoin buys (BTC price ÷ gold spot). Strips out dollar debasement to show BTC's performance against the oldest hard money — rising = BTC outpacing gold.",
   "STRC Live":"Strategy's STRC preferred, designed to trade near its $100 par. Distance from par plus short interest signals squeeze risk and the health of Strategy's preferred-equity financing.",
@@ -1038,6 +1112,7 @@ const TIPS={
   "S2E Ratio — Stablecoins vs BTC":"Stablecoin supply relative to BTC's tradeable-float value. A higher ratio means more sidelined buying power per available coin — structurally bullish.",
   "10Y Treasury Yield":"The global risk-free benchmark. Rising yields tighten financial conditions and pressure risk assets like BTC; falling yields ease them. Above ~4.5% is a headwind.",
   "DXY Index":"The dollar against a basket of major currencies. BTC usually trades inversely — a weakening DXY, especially failing key levels, is a tailwind.",
+  "USD/JPY (Carry)":"Yen per dollar — the key gauge for the yen carry trade. A rising rate (weak yen) keeps cheap-funding carry flows on; a sharp drop (yen strength) can force a carry unwind and broad risk-off, as in Aug 2024. Watch fast down-moves.",
   "Gold Spot":"The legacy debasement hedge. Tracked as a correlation check — when gold and BTC rise together it signals a broad hard-asset bid, not crypto-only flows.",
   "WTI Crude":"US oil benchmark, watched as an inflation input and geopolitical gauge. Oil spikes feed inflation fears that shape Fed policy and risk appetite.",
   "Brent Crude":"The international oil benchmark vs WTI's US focus. Its level and the Brent–WTI spread flag global supply stress, especially around shipping chokepoints.",
@@ -1117,8 +1192,10 @@ setTimeout(fetchOI, 800);
 setTimeout(fetchDXY, 1000);
 setTimeout(fetchSTRCLive, 1200);
 setTimeout(fetch10Y, 1300);
+setTimeout(fetchJPY, 1400);
 setTimeout(fetchGold, 1500);
 setTimeout(updateBtcGold, 2000);
+setTimeout(fetchAbsorption, 1800);
 
 // Start WebSockets
 setTimeout(connectBN, 300);
@@ -1136,7 +1213,9 @@ setInterval(fetchFG, 60000);
 setInterval(fetchOI, 120000);
 setInterval(fetchDXY, 120000);
 setInterval(fetch10Y, 120000);
+setInterval(fetchJPY, 120000);
 setInterval(fetchGold, 120000);
+setInterval(fetchAbsorption, 1800000);
 setInterval(fetchSTRCLive, 120000);
 setInterval(()=>{if(_key&&!proxyRunning)runProxySequence()}, 300000); // proxy every 5min
 </script>
