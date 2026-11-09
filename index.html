@@ -228,10 +228,13 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
     <div class="prem-row"><span style="font-size:10px;color:var(--text1)">Signal</span><span class="val sm" id="bid-signal">--</span></div>
   </div>
   <div class="card">
-    <div class="lbl">Bid / Ask Ratio</div>
+    <div class="lbl">Bid / Ask Depth</div>
     <div class="val lg" id="ba-ratio">--</div>
     <div class="sub" id="ba-desc">--</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-ob"></span>depth5@100ms</div>
+    <div class="sub mut" id="ba-detail" style="margin-top:2px">&nbsp;</div>
+    <div class="sub mut" id="ba-venues" style="margin-top:1px">&nbsp;</div>
+    <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" id="band-0.5" onclick="setBand(0.5)">±0.5%</button><button class="btn active" id="band-1" onclick="setBand(1)">±1%</button></div>
+    <div class="src"><span class="sdot sdot-wait" id="d-ob"></span>Binance + Coinbase · 5-min avg</div>
   </div>
 </div>
 <div class="g4">
@@ -422,24 +425,69 @@ async function fetchBNREST(){
 }
 
 // ── BINANCE ORDER BOOK ───────────────────────
-let obWs=null;
-function connectOB(){
-  try{
-    obWs=new WebSocket('wss://data-stream.binance.vision/ws/btcusdt@depth5@100ms');
-    obWs.onopen=()=>setDot('d-ob','ok');
-    obWs.onmessage=e=>{
-      const d=JSON.parse(e.data);
-      if(!d.bids||!d.asks)return;
-      const bv=d.bids.reduce((s,b)=>s+parseFloat(b[1]),0);
-      const av=d.asks.reduce((s,a)=>s+parseFloat(a[1]),0);
-      const r=av>0?(bv/av):1;
-      const dir=r>1.1?'up':r<0.9?'dn':'neu';
-      const desc=r>1.2?'Strong buy pressure':r>1.05?'Mild buy pressure':r<0.8?'Sell dominant':'Balanced';
-      setV('ba-ratio',r.toFixed(2),dir); setV('ba-desc',desc,dir); setDot('d-ob','ok');
-    };
-    obWs.onerror=()=>setDot('d-ob','err');
-    obWs.onclose=()=>{setDot('d-ob','wait');setTimeout(connectOB,3000)};
-  }catch{setTimeout(connectOB,5000)}
+// ── ORDER BOOK DEPTH (Binance + Coinbase) ─────
+// Dollar depth within ±band of each venue's mid price, from full-ish book snapshots
+// (Binance 5000 levels ≈ ±1.4%, Coinbase full L2). Smoothed over the last ~5 min so a
+// single pulled order can't flip the reading. Venues whose snapshot doesn't reach the
+// band edge are skipped for that sample rather than under-counted.
+const DEPTH={band:1,hist:[],busy:false};
+const DEPTH_BANDS=[0.5,1];
+function bookBands(bids,asks){
+  const bb=parseFloat(bids[0][0]),aa=parseFloat(asks[0][0]);
+  if(!(bb>0&&aa>0))return null;
+  const mid=(bb+aa)/2, out={};
+  const loEdge=parseFloat(bids[bids.length-1][0]), hiEdge=parseFloat(asks[asks.length-1][0]);
+  for(const b of DEPTH_BANDS){
+    const lo=mid*(1-b/100), hi=mid*(1+b/100);
+    if(loEdge>lo||hiEdge<hi){out[b]=null;continue;} // snapshot too shallow for this band
+    let bid=0,ask=0;
+    for(const l of bids){const px=parseFloat(l[0]); if(px<lo)break; bid+=px*parseFloat(l[1]);}
+    for(const l of asks){const px=parseFloat(l[0]); if(px>hi)break; ask+=px*parseFloat(l[1]);}
+    out[b]={bid,ask};
+  }
+  return out;
+}
+async function fetchDepth(){
+  if(DEPTH.busy)return; DEPTH.busy=true;
+  const sample={t:Date.now(),bn:null,cb:null};
+  const jobs=[
+    fetch('https://data-api.binance.vision/api/v3/depth?symbol=BTCUSDT&limit=5000').then(r=>r.json()).then(j=>{sample.bn=bookBands(j.bids,j.asks);}).catch(()=>{}),
+    fetch('https://api.exchange.coinbase.com/products/BTC-USD/book?level=2').then(r=>r.json()).then(j=>{sample.cb=bookBands(j.bids,j.asks);}).catch(()=>{}),
+  ];
+  await Promise.all(jobs);
+  DEPTH.busy=false;
+  if(!sample.bn&&!sample.cb){setDot('d-ob','err');return;}
+  DEPTH.hist.push(sample); if(DEPTH.hist.length>15)DEPTH.hist.shift();
+  setDot('d-ob','ok');
+  renderDepth();
+}
+function setBand(b){
+  DEPTH.band=b;
+  DEPTH_BANDS.forEach(x=>{const e=$('band-'+x);if(e)e.classList.toggle('active',x===b);});
+  renderDepth();
+}
+function renderDepth(){
+  const b=DEPTH.band, h=DEPTH.hist; if(!h.length)return;
+  const venuesOf=s=>['bn','cb'].filter(v=>s[v]&&s[v][b]);
+  const last=h[h.length-1], nv=venuesOf(last).length;
+  if(!nv){setV('ba-ratio','--','mut');setV('ba-desc','Book too shallow for this band','mut');return;}
+  // smooth only over samples that had the same venue set as the latest one
+  const key=s=>venuesOf(s).join('+'), k=key(last);
+  const use=h.filter(s=>key(s)===k);
+  const tot=s=>venuesOf(s).reduce((a,v)=>({bid:a.bid+s[v][b].bid,ask:a.ask+s[v][b].ask}),{bid:0,ask:0});
+  const avg=use.map(tot).reduce((a,x)=>({bid:a.bid+x.bid/use.length,ask:a.ask+x.ask/use.length}),{bid:0,ask:0});
+  const imb=(avg.bid-avg.ask)/(avg.bid+avg.ask)*100, ratio=avg.ask>0?avg.bid/avg.ask:1;
+  S.depth={imb,ratio,band:b};
+  const dir=imb>=10?'up':imb<=-10?'dn':'neu';
+  const desc=imb>=25?'Bid-heavy — strong support stacked':imb>=10?'Bid-heavy':imb<=-25?'Ask-heavy — strong overhead supply':imb<=-10?'Ask-heavy':'Balanced';
+  const M=x=>'$'+(x/1e6).toFixed(1)+'M';
+  setV('ba-ratio',(imb>=0?'+':'')+imb.toFixed(0)+'%',dir);
+  setV('ba-desc',desc,dir);
+  const pv=v=>{if(!(last[v]&&last[v][b]))return null;const x=last[v][b];return(x.bid-x.ask)/(x.bid+x.ask)*100;};
+  const bn=pv('bn'),cb=pv('cb'),f=x=>x==null?'--':(x>=0?'+':'')+x.toFixed(0)+'%';
+  setV('ba-detail','Bid '+M(avg.bid)+' · Ask '+M(avg.ask)+' · '+ratio.toFixed(2)+'x','mut');
+  setV('ba-venues','Now: Binance '+f(bn)+' · Coinbase '+f(cb),'mut');
+  updateComposite();
 }
 
 // ── FUNDING RATE (CORS-safe REST) ────────────
@@ -1087,6 +1135,8 @@ const GROUPS=[
      tag:()=>S.rsi<=30?'OVERSOLD':S.rsi>=70?'OVERBOUGHT':'NEUTRAL'},
     {name:'Fear & Greed',has:()=>S.fg!==null,val:()=>S.fg+'/100'+(S.fgLbl?' — '+S.fgLbl:''),
      tag:()=>S.fg<=20?'EXTREME FEAR':S.fg>=75?'EXTREME GREED':'NEUTRAL'},
+    {name:'Book depth imbalance',has:()=>!!S.depth,val:()=>(S.depth.imb>=0?'+':'')+S.depth.imb.toFixed(0)+'% (±'+S.depth.band+'%)',
+     tag:()=>S.depth.imb>=10?'BID-HEAVY':S.depth.imb<=-10?'ASK-HEAVY':'BALANCED'},
     {name:'STRC vs $100 par',has:()=>!!S.strc,val:()=>'$'+S.strc.toFixed(2),
      tag:()=>S.strc<100?'BELOW PAR':'AT / ABOVE PAR'},
   ]},
@@ -1137,7 +1187,7 @@ const TIPS={
   "Binance BTC/USDT":"Spot price on the world's highest-volume exchange — the global reference for BTC. It's the baseline that premiums and basis are measured against.",
   "Coinbase BTC/USD":"Spot price on the largest US-regulated exchange, a proxy for American institutional demand. Trading above Binance (a 'Coinbase premium') signals US buying pressure.",
   "Exchange Premiums":"The price gap between Coinbase and Binance. A positive Coinbase premium marks aggressive US/institutional accumulation; a negative gap means offshore/Asian demand is leading.",
-  "Bid / Ask Ratio":"Resting buy vs sell liquidity in the top 5 order-book levels. Above 1 = more bids than asks (support); below 1 = sellers stacked. A quick gauge of near-term order flow.",
+  "Bid / Ask Depth":"Dollar value of resting bids vs asks within ±0.5% or ±1% of price, summed across Binance and Coinbase and averaged over ~5 minutes. The big number is the imbalance: +100% = only bids, −100% = only asks. Resting orders can be pulled, so treat it as context, not a signal.",
   "Fear / Greed":"A 0–100 sentiment composite of volatility, momentum, and volume. Used contrarily — extreme fear often marks local bottoms, extreme greed marks froth.",
   "RSI (14-Day)":"Momentum on a 0–100 scale over 14 daily candles. Below 30 is oversold (bounce risk), above 70 is overbought (pullback risk).",
   "Funding Rate (Perp)":"The periodic payment between perp longs and shorts that pins the perp price to spot. Positive = longs pay (crowded long); negative = shorts pay (crowded short, squeeze fuel). Reveals leveraged positioning.",
@@ -1232,7 +1282,7 @@ setTimeout(fetchAbsorption, 1800);
 
 // Start WebSockets
 setTimeout(connectBN, 300);
-setTimeout(connectOB, 500);
+setTimeout(fetchDepth, 600);
 setTimeout(connectCB, 900);
 
 // If key exists, run proxy sequence after non-proxy data loads
@@ -1246,6 +1296,7 @@ setInterval(fetchFG, 60000);
 setInterval(fetchOI, 120000);
 setInterval(fetchDXY, 30000);
 setInterval(fetchFedOdds, 300000);
+setInterval(fetchDepth, 20000);
 setInterval(fetch10Y, 120000);
 setInterval(fetchJPY, 120000);
 setInterval(fetchGold, 120000);
