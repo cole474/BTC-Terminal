@@ -107,6 +107,14 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
 /* MSBT */
 .msbt-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 
+/* FED ODDS */
+.fed-bar{display:flex;height:8px;border-radius:2px;overflow:hidden;background:var(--bg3);margin:8px 0 6px}
+.fed-bar span{display:block;height:100%;transition:width .6s ease}
+.fb-cut{background:var(--green)}.fb-hold{background:var(--amber)}.fb-hike{background:var(--red)}
+.fed-leg{display:flex;justify-content:space-between;font-size:10px;font-variant-numeric:tabular-nums}
+.src a{color:var(--text2);text-decoration:underline}
+.status-row{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+
 /* PREMIUM */
 .prem-row{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--bg2)}
 .prem-row:last-child{border-bottom:none}
@@ -171,13 +179,14 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
     <div class="lbl">STRC Live</div>
     <div class="val lg" id="strctop-val">--</div>
     <div class="sub" id="strctop-sub">vs $100 par</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-strctop"></span>Yahoo · Stooq · manual</div>
+    <div class="status-row"><span class="badge b-neu" id="strctop-status">&mdash;</span><span class="sub" style="margin-top:0" id="strctop-squeeze"></span></div>
+    <div class="src"><span class="sdot sdot-wait" id="d-strctop"></span>Yahoo · Stooq</div>
   </div>
   <div class="card">
     <div class="lbl">DXY Index</div>
     <div class="val" id="dxy-val">--</div>
     <div class="sub" id="dxy-sub">Calculated from live FX</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-dxy"></span>ICE DX-Y.NYB · FX fallback</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-dxy"></span>Kraken live FX · ICE fallback</div>
   </div>
   <div class="card">
     <div class="lbl">USD/JPY (Carry)</div>
@@ -190,6 +199,20 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
     <div class="val neu" id="yield-val">--</div>
     <div class="sub" id="yield-sub">API key needed ↓</div>
     <div class="src"><span class="sdot sdot-wait" id="d-yield"></span>Yahoo ^TNX · proxy fallback</div>
+  </div>
+</div>
+
+<!-- MSBT STATUS (moved up) -->
+<div class="sec">MSBT Status</div>
+<div class="card">
+  <div class="msbt-grid">
+    <div><div class="lbl">Filing Status</div><div class="val sm up" style="font-size:13px">S-1 Amended</div><div class="sub">Mar 17-18, 2026</div></div>
+    <div><div class="lbl">Ticker / Exchange</div><div class="val sm up" style="font-size:13px">MSBT / NYSE Arca</div><div class="sub">Confirmed in filing</div></div>
+    <div><div class="lbl">Est. Launch</div><div class="val sm neu" style="font-size:13px">Mid-April 2026</div><div class="sub">Pending SEC approval</div></div>
+    <div><div class="lbl">Pre-Seed Migration</div><div class="val sm dn" style="font-size:13px">~45,000 BTC</div><div class="sub dn">Coinbase cold vault</div></div>
+  </div>
+  <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text1)">
+    15,000 financial advisors · $5.5T AUM · 6-month fee waiver on first $5B · Coinbase custody (same as IBIT)
   </div>
 </div>
 
@@ -292,51 +315,19 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
     <div class="sub" id="gold-sub">--</div>
     <div class="src"><span class="sdot sdot-wait" id="d-gold"></span>api.gold-api.com</div>
   </div>
-  <div class="card">
-    <div class="lbl">WTI Crude</div>
-    <div class="val" id="wti-val">--</div>
-    <div class="sub" id="wti-sub">API key needed ↓</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-wti"></span>Claude proxy</div>
-  </div>
-</div>
-<div class="g2">
-  <div class="card">
-    <div class="lbl">Brent Crude</div>
-    <div class="val" id="brent-val">--</div>
-    <div class="sub" id="brent-sub">API key needed ↓</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-brent"></span>Claude proxy</div>
-  </div>
-  <div class="card">
-    <div class="lbl">Strait of Hormuz Status</div>
-    <div class="val sm neu" id="soh-val">RESTRICTED</div>
-    <div class="sub neu" id="soh-sub">5-day pause expires Sat · 82nd Airborne deploying</div>
-    <div style="display:flex;gap:6px;margin-top:8px">
-      <button class="btn" onclick="setSoH('OPEN','De-escalation — risk-on BTC bid','up')">Open</button>
-      <button class="btn active" onclick="setSoH('RESTRICTED','Partial — elevated war premium','neu')">Restricted</button>
-      <button class="btn" onclick="setSoH('CLOSED','Closed — flight to BTC neutral layer','dn')">Closed</button>
-    </div>
+  <div class="card" id="card-fed">
+    <div class="lbl">Fed Decision Odds</div>
+    <div class="val sm" id="fed-val">--</div>
+    <div class="sub" id="fed-sub">Loading…</div>
+    <div class="fed-bar"><span class="fb-cut" id="fed-cut-bar" style="width:0%"></span><span class="fb-hold" id="fed-hold-bar" style="width:0%"></span><span class="fb-hike" id="fed-hike-bar" style="width:0%"></span></div>
+    <div class="fed-leg"><span class="up">CUT <b id="fed-cut">--</b></span><span class="neu">HOLD <b id="fed-hold">--</b></span><span class="dn">HIKE <b id="fed-hike">--</b></span></div>
+    <div class="src"><span class="sdot sdot-wait" id="d-fed"></span>Polymarket market-implied · <a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" rel="noopener">CME FedWatch ↗</a></div>
   </div>
 </div>
 
 <!-- STRATEGY SECURITIES -->
 <div class="sec">Strategy / Preferred Securities</div>
-<div class="g4">
-  <div class="card" id="card-mstr">
-    <div class="lbl">MSTR Share Price</div>
-    <div class="val" id="mstr-val">--</div>
-    <div class="sub" id="mstr-sub">API key needed ↓</div>
-    <div class="src"><span class="sdot sdot-wait" id="d-mstr"></span>Claude proxy</div>
-  </div>
-  <div class="card" id="card-strc">
-    <div class="lbl">STRC Share Price</div>
-    <div class="val dn" id="strc-val">--</div>
-    <div class="sub dn" id="strc-sub">API key needed ↓</div>
-    <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
-      <input class="inp" id="strc-inp" type="number" placeholder="Manual override" step="0.01" style="width:130px">
-      <button class="btn" onclick="setSTRC()">Set</button>
-    </div>
-    <div class="src"><span class="sdot sdot-wait" id="d-strc"></span>Claude proxy · or manual</div>
-  </div>
+<div class="g2">
   <div class="card">
     <div class="lbl">STRC vs Par ($100)</div>
     <div class="val dn" id="strc-par">--</div>
@@ -351,26 +342,13 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
   </div>
 </div>
 
-<!-- MSBT -->
-<div class="sec">MSBT Launch Tracker</div>
-<div class="card">
-  <div class="msbt-grid">
-    <div><div class="lbl">Filing Status</div><div class="val sm up" style="font-size:13px">S-1 Amended</div><div class="sub">Mar 17-18, 2026</div></div>
-    <div><div class="lbl">Ticker / Exchange</div><div class="val sm up" style="font-size:13px">MSBT / NYSE Arca</div><div class="sub">Confirmed in filing</div></div>
-    <div><div class="lbl">Est. Launch</div><div class="val sm neu" style="font-size:13px">Mid-April 2026</div><div class="sub">Pending SEC approval</div></div>
-    <div><div class="lbl">Pre-Seed Migration</div><div class="val sm dn" style="font-size:13px">~45,000 BTC</div><div class="sub dn">Coinbase cold vault</div></div>
-  </div>
-  <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text1)">
-    15,000 financial advisors · $5.5T AUM · 6-month fee waiver on first $5B · Coinbase custody (same as IBIT)
-  </div>
-</div>
 
 <!-- SIGNAL SUMMARY -->
 <div class="sec">Signal Summary</div>
 <div class="sig-table" id="sig-table"></div>
 
 <!-- API KEY -->
-<div class="sec">Anthropic API Key — Required for 10Y, WTI, Brent, MSTR, STRC</div>
+<div class="sec">Anthropic API Key — Optional fallback for 10Y, STRC</div>
 <div class="key-panel">
   <div class="key-row">
     <input class="inp" id="key-inp" type="password" placeholder="sk-ant-api03-..." style="width:360px;font-family:monospace">
@@ -385,7 +363,7 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
 
 </div><!-- /main -->
 
-<div class="footer">BTC Intelligence Terminal · Personal use · Binance WS · Coinbase WS · alternative.me · gold-api.com · fawazahmed0 · Claude proxy</div>
+<div class="footer">BTC Intelligence Terminal · Personal use · Binance WS · Coinbase WS · alternative.me · gold-api.com · Kraken FX · Polymarket · fawazahmed0 · Claude proxy</div>
 
 <script>
 // ── STATE ──────────────────────────────────────
@@ -396,12 +374,11 @@ const S = {
   fg:null, fgLbl:null,
   rsi:null,
   oi:null,
-  yield10y:null, dxy:null, jpy:null, gold:null, goldChg:null, wti:null, brent:null,
-  mstr:null, strc:null, strcManual:false,
+  yield10y:null, dxy:null, jpy:null, gold:null, goldChg:null,
+  strc:null,
   etfHold:null, etfAum:null, etfFlow:null, etfFlowDate:null, mstrHold:null,
   floatVal:408200, floatPeak:1100000, todayOutflow:12000,
   floatTs:null,
-  sohStatus:'RESTRICTED',
 };
 let _key = sessionStorage.getItem('btc_key') || '';
 
@@ -418,7 +395,7 @@ function flash(id,dir){const e=$(id);if(!e)return;e.classList.remove('flash-up',
 const TAPE_FIELDS = [
   ['BTC/USDT','t-bn'],['BTC/USD','t-cb'],['PREMIUM','t-prem'],
   ['FUNDING','t-fund'],['F&G','t-fg'],['10Y','t-10y'],
-  ['DXY','t-dxy'],['USD/JPY','t-jpy'],['GOLD','t-gold'],['WTI','t-wti'],['BTC/GOLD','t-btcgold'],
+  ['DXY','t-dxy'],['USD/JPY','t-jpy'],['GOLD','t-gold'],['BTC/GOLD','t-btcgold'],
 ];
 function buildTape(){
   const inner = $('tape-inner');
@@ -673,36 +650,127 @@ async function yahooQuote(symbol){
   }
   return null;
 }
-// ── DXY (corrected formula) ───────────────────
+// ── DXY (live) ────────────────────────────────
+// ICE's DXY basket formula, computed from live FX:
 // DXY = 50.14348112 × EURUSD^-0.576 × USDJPY^0.136 × GBPUSD^-0.119
 //       × USDCAD^0.091 × USDSEK^0.042 × USDCHF^0.036
+// Primary: Kraken public FX tickers (CORS-open, no key, tick-level fresh).
+// Yahoo's DX-Y.NYB comes through cached/delayed CORS relays, which caused the lag,
+// so it is now only a fallback. Pairs Kraken lacks (SEK) or quotes with a blown-out
+// spread (thin books) come from the daily FX table instead.
+function dxyFormula(p){
+  return 50.14348112*Math.pow(p.EURUSD,-0.576)*Math.pow(p.USDJPY,0.136)*Math.pow(p.GBPUSD,-0.119)*
+         Math.pow(p.USDCAD,0.091)*Math.pow(p.USDSEK,0.042)*Math.pow(p.USDCHF,0.036);
+}
+let _fxDaily={t:0,p:null};
+async function getFxDaily(){
+  if(_fxDaily.p&&Date.now()-_fxDaily.t<3600000)return _fxDaily.p;
+  const r=await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
+  const d=await r.json();
+  if(!d.usd)throw new Error('no fx');
+  const u=d.usd;
+  _fxDaily={t:Date.now(),p:{EURUSD:1/u.eur,USDJPY:u.jpy,GBPUSD:1/u.gbp,USDCAD:u.cad,USDSEK:u.sek,USDCHF:u.chf}};
+  return _fxDaily.p;
+}
+function showDXY(val,subTxt,cls){
+  S.dxy=parseFloat(val.toFixed(2));
+  setV('dxy-val',S.dxy.toFixed(2),'neu');
+  setV('dxy-sub',subTxt,cls||'mut');
+  tapSet('t-dxy',S.dxy.toFixed(2)); setDot('d-dxy','ok'); updateComposite();
+}
+async function fetchDXYLive(){
+  const daily=await getFxDaily().catch(()=>null);
+  const r=await fetch('https://api.kraken.com/0/public/Ticker?pair=EURUSD,GBPUSD,USDJPY,USDCAD,USDCHF');
+  const j=await r.json();
+  const res=j.result||{};
+  const pick=re=>{
+    const k=Object.keys(res).find(x=>re.test(x)); if(!k)return null;
+    const v=res[k], b=parseFloat(v.b[0]), a=parseFloat(v.a[0]), o=parseFloat(v.o);
+    if(!(b>0&&a>0&&o>0))return null;
+    if((a-b)/((a+b)/2)>0.0015)return null; // illiquid / stale book: don't trust
+    return{now:(a+b)/2,open:o};
+  };
+  const live={EURUSD:pick(/EUR/),GBPUSD:pick(/GBP/),USDJPY:pick(/JPY/),USDCAD:pick(/CAD/),USDCHF:pick(/CHF/)};
+  if(!live.EURUSD)return false; // EUR is 57.6% of the basket; without it this isn't live
+  const now={},open={},daysFrom=[];
+  for(const k of ['EURUSD','GBPUSD','USDJPY','USDCAD','USDSEK','USDCHF']){
+    if(live[k]){now[k]=live[k].now;open[k]=live[k].open;}
+    else if(daily&&daily[k]){now[k]=daily[k];open[k]=daily[k];daysFrom.push(k.replace('USD','').replace(/^$/,'')||k);}
+    else return false;
+  }
+  const v=dxyFormula(now), v0=dxyFormula(open);
+  const chg=(v-v0)/v0*100;
+  const [ar,cls]=dayArrow(chg);
+  const note=daysFrom.length?' · '+daysFrom.join('/')+' daily':'';
+  showDXY(v,ar+' '+(chg>=0?'+':'')+chg.toFixed(2)+'% since 00:00 UTC'+note,cls);
+  return true;
+}
 async function fetchDXY(){
-  // Primary: real ICE Dollar Index (DX-Y.NYB) via Yahoo
+  try{ if(await fetchDXYLive())return; }catch(e){}
+  // Fallback 1: ICE DX-Y.NYB via Yahoo (delayed, relay-cached)
   const q=await yahooQuote('DX-Y.NYB');
   if(q&&q.price>50&&q.price<200){
-    S.dxy=parseFloat(q.price.toFixed(2));
     const [ar,cls]=dayArrow(q.chgPct);
-    setV('dxy-val',S.dxy.toFixed(2),'neu');
-    setV('dxy-sub',q.chgPct!=null?ar+' '+(q.chgPct>=0?'+':'')+q.chgPct.toFixed(2)+'% (24h)':'ICE close',cls);
-    tapSet('t-dxy',S.dxy.toFixed(2)); setDot('d-dxy','ok'); updateComposite();
+    showDXY(q.price,(q.chgPct!=null?ar+' '+(q.chgPct>=0?'+':'')+q.chgPct.toFixed(2)+'% (24h)':'ICE')+' · delayed feed',cls);
     return;
   }
-  // Fallback: derive from live FX (less precise than the ICE print)
+  // Fallback 2: daily FX table (stale by up to a day)
   try{
-    const r=await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
-    const d=await r.json();
-    if(!d.usd)throw new Error();
-    const u=d.usd;
-    const EURUSD=1/u.eur, USDJPY=u.jpy, GBPUSD=1/u.gbp;
-    const USDCAD=u.cad, USDSEK=u.sek, USDCHF=u.chf;
-    const dxy=50.14348112*
-      Math.pow(EURUSD,-0.576)*Math.pow(USDJPY,0.136)*Math.pow(GBPUSD,-0.119)*
-      Math.pow(USDCAD,0.091)*Math.pow(USDSEK,0.042)*Math.pow(USDCHF,0.036);
-    S.dxy=parseFloat(dxy.toFixed(2));
-    setV('dxy-val',S.dxy.toFixed(2),'neu');
-    setV('dxy-sub','≈ FX-derived (ICE feed down)','mut');
-    tapSet('t-dxy',S.dxy.toFixed(2)); setDot('d-dxy','ok'); updateComposite();
+    const p=await getFxDaily();
+    showDXY(dxyFormula(p),'≈ daily FX (live feeds down)','mut');
   }catch{setDot('d-dxy','err')}
+}
+// ── FED DECISION ODDS (next FOMC) ─────────────
+// CME FedWatch has no public, CORS-safe API. This reads the Polymarket "Fed Decision
+// in <Month>?" market for the next unresolved FOMC meeting (CORS-open, no key). It is
+// market-implied (prediction market), a close cousin of FedWatch's futures-implied odds,
+// not the CME number itself — the card links to the real FedWatch tool.
+async function fetchFedOdds(){
+  try{
+    const nowMs=Date.now();
+    const mon=d=>d.toLocaleString('en-US',{month:'long',timeZone:'America/New_York'});
+    const queries=['Fed decision in '+mon(new Date(nowMs)),'Fed decision in '+mon(new Date(nowMs+35*864e5)),'Fed decision'];
+    const seen=new Map();
+    for(const q of queries){
+      try{
+        const r=await fetch('https://gamma-api.polymarket.com/public-search?q='+encodeURIComponent(q)+'&events_status=active');
+        if(!r.ok)continue;
+        const j=await r.json();
+        (j.events||[]).forEach(e=>seen.set(e.slug,e));
+      }catch(e){}
+    }
+    const cands=[...seen.values()]
+      .filter(e=>/fed decision in/i.test(e.title||'')&&!e.closed&&e.endDate&&new Date(e.endDate).getTime()>nowMs&&(e.markets||[]).length>=3)
+      .sort((a,b)=>new Date(a.endDate)-new Date(b.endDate));
+    if(!cands.length)throw new Error('no event');
+    const ev=cands[0];
+    let cut=0,hold=0,hike=0;
+    ev.markets.forEach(m=>{
+      if(m.closed)return;
+      const t=(m.groupItemTitle||m.question||'').toLowerCase();
+      let p; try{p=parseFloat(JSON.parse(m.outcomePrices)[0]);}catch(e){p=NaN;}
+      if(isNaN(p))return;
+      if(/decrease|cut/.test(t))cut+=p;
+      else if(/increase|hike/.test(t))hike+=p;
+      else if(/no change|unchanged|hold/.test(t))hold+=p;
+    });
+    const tot=cut+hold+hike;
+    if(!(tot>0.5))throw new Error('thin');
+    const pc=cut/tot*100, ph=hold/tot*100, pk=hike/tot*100;
+    S.fed={cut:pc,hold:ph,hike:pk};
+    const lead=pk>=pc&&pk>=ph?['HIKE',pk,'dn']:pc>=ph?['CUT',pc,'up']:['HOLD',ph,'neu'];
+    const when=new Date(ev.endDate).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/New_York'});
+    const days=Math.max(0,Math.ceil((new Date(ev.endDate).getTime()-nowMs)/864e5));
+    setV('fed-val',lead[0]+' '+lead[1].toFixed(0)+'%',lead[2]);
+    setV('fed-sub','FOMC '+when+' · '+days+'d away · market-implied','mut');
+    setV('fed-cut',pc.toFixed(0)+'%'); setV('fed-hold',ph.toFixed(0)+'%'); setV('fed-hike',pk.toFixed(0)+'%');
+    $('fed-cut-bar').style.width=pc+'%'; $('fed-hold-bar').style.width=ph+'%'; $('fed-hike-bar').style.width=pk+'%';
+    setDot('d-fed','ok');
+  }catch(e){
+    setV('fed-val','UNAVAILABLE','mut');
+    setV('fed-sub','Odds feed unreachable — check CME FedWatch ↗','mut');
+    setDot('d-fed','err');
+  }
 }
 // ── 10Y TREASURY YIELD (no key) ───────────────
 // CBOE 10Y yield index (^TNX) via Yahoo. Some feeds quote it x10, so
@@ -864,7 +932,7 @@ async function fetchAbsorption(){
   await fetchMSTRHoldings();
 }
 // ── CLAUDE PROXY ─────────────────────────────
-// Used for: 10Y yield, WTI, Brent, MSTR, STRC
+// Used for (optional fallback): 10Y yield, STRC
 // Calls are sequential with gaps to respect rate limits
 async function claudeCall(prompt){
   if(!_key)throw new Error('no-key');
@@ -895,7 +963,7 @@ let proxyRunning=false;
 async function runProxySequence(){
   if(proxyRunning)return;
   if(!_key){
-    ['d-yield','d-wti','d-brent','d-mstr','d-strc'].forEach(d=>setDot(d,'err'));
+    ['d-yield','d-strctop'].forEach(d=>setDot(d,'err'));
     return;
   }
   proxyRunning=true;
@@ -916,42 +984,15 @@ async function runProxySequence(){
 
   await sleep(10000); // wait 10s
 
-  // Step 2: WTI + Brent
-  try{
-    const t=await claudeCall('WTI and Brent crude oil price USD/barrel now. JSON: {"wti":89.40,"brent":96.80}');
-    const p=extractJSON(t);
-    if(p?.wti&&!isNaN(p.wti)){
-      S.wti=parseFloat(p.wti);
-      setV('wti-val','$'+S.wti.toFixed(2),'neu');
-      setV('wti-sub','Live · War premium','neu');
-      tapSet('t-wti','$'+S.wti.toFixed(2)); setDot('d-wti','ok');
+  // Step 2: STRC (only if the no-key feeds haven't filled it)
+  if(S.strc==null){
+    try{
+      const t=await claudeCall('Current Nasdaq price of STRC (Strategy preferred). JSON: {"STRC":99.94}');
+      const p=extractJSON(t);
+      if(p?.STRC&&!isNaN(p.STRC)){ S.strc=parseFloat(p.STRC); renderSTRC(); }
+    }catch(e){
+      if(!S.strc)setDot('d-strctop',e.message==='no-key'?'wait':'err');
     }
-    if(p?.brent&&!isNaN(p.brent)){
-      S.brent=parseFloat(p.brent);
-      setV('brent-val','$'+S.brent.toFixed(2),'neu');
-      setV('brent-sub','Live · Global benchmark','neu');
-      setDot('d-brent','ok');
-    }
-  }catch(e){setDot('d-wti',e.message==='no-key'?'wait':'err');setDot('d-brent',e.message==='no-key'?'wait':'err')}
-
-  await sleep(10000); // wait 10s
-
-  // Step 3: MSTR + STRC
-  try{
-    const t=await claudeCall('Current Nasdaq stock prices MSTR and STRC. JSON: {"MSTR":139.50,"STRC":99.94}');
-    const p=extractJSON(t);
-    if(p?.MSTR&&!isNaN(p.MSTR)){
-      S.mstr=parseFloat(p.MSTR);
-      setV('mstr-val','$'+S.mstr.toFixed(2),'neu');
-      setV('mstr-sub','Live · Claude proxy','mut');
-      setDot('d-mstr','ok');
-    }
-    if(p?.STRC&&!isNaN(p.STRC)&&!S.strcManual){
-      S.strc=parseFloat(p.STRC); renderSTRC(); setDot('d-strc','ok');
-    }
-  }catch(e){
-    setDot('d-mstr',e.message==='no-key'?'wait':'err');
-    if(!S.strc)setDot('d-strc',e.message==='no-key'?'wait':'err');
   }
 
   proxyRunning=false;
@@ -963,20 +1004,23 @@ function renderSTRC(){
   if(!S.strc)return;
   const v=S.strc-100;
   const dir=S.strc<99.5?'dn':S.strc>100.5?'up':'neu';
-  setV('strc-val','$'+S.strc.toFixed(2),dir);
-  setV('strc-sub','Below par — heavily shorted',dir);
+  const sq=S.strc<99.5?'HIGH':S.strc<100?'MEDIUM':'LOW';
   setV('strc-par',(v>=0?'+':'')+Math.abs(v).toFixed(2)+' vs par',v>=0?'up':'dn');
   setV('squeeze-lbl','Squeeze risk: '+(S.strc<99.5?'HIGH — shorts at max risk':S.strc<100?'MEDIUM':'LOW'),dir);
-  setDot('d-strc','ok');
-  // top-strip mirror
+  // top STRC box
   setV('strctop-val','$'+S.strc.toFixed(2),dir);
   setV('strctop-sub',(v>=0?'+':'')+v.toFixed(2)+' vs $100 par',v>=0?'up':'dn');
+  const st=$('strctop-status');
+  if(st){
+    if(S.strc<100){ st.textContent='HEAVILY SHORTED'; st.className='badge b-dn'; }
+    else { st.textContent='AT / ABOVE PAR'; st.className='badge b-neu'; }
+  }
+  setV('strctop-squeeze','Squeeze risk: '+sq,S.strc<99.5?'dn':S.strc<100?'neu':'mut');
   setDot('d-strctop','ok');
 }
 // ── STRC LIVE (no key) ────────────────────────
-// Yahoo quote first, then Stooq CSV. Manual entry (lower card) overrides both.
+// Yahoo quote first, then Stooq CSV.
 async function fetchSTRCLive(){
-  if(S.strcManual)return;
   const q=await yahooQuote('STRC');
   if(q&&q.price>0&&q.price<1000){
     S.strc=parseFloat(q.price.toFixed(2)); renderSTRC(); updateComposite(); return;
@@ -993,19 +1037,6 @@ async function fetchSTRCLive(){
   }catch(e){
     if(!S.strc)setDot('d-strctop','wait'); // proxy/manual may still fill it
   }
-}
-function setSTRC(){
-  const v=parseFloat($('strc-inp')?.value);
-  if(isNaN(v)||v<=0)return;
-  S.strc=v; S.strcManual=true; renderSTRC();
-  $('strc-inp').value=''; updateComposite();
-}
-
-// ── SOH ───────────────────────────────────────
-function setSoH(status,sub,dir){
-  S.sohStatus=status;
-  setV('soh-val',status,dir); setV('soh-sub',sub,dir);
-  updateComposite();
 }
 
 // ── FLOAT ─────────────────────────────────────
@@ -1095,7 +1126,7 @@ const TIPS={
   "Total Institutional Sink (ETFs + Strategy)":"US spot ETF holdings plus Strategy's stack — combined BTC locked away from the tradeable market, shown as a share of the 21M cap.",
   "Composite Signal Score / 10":"A 0–10 roll-up of every signal below. Each votes bull, bear, or neutral; the score is the share that are bullish — a one-glance read on whether conditions are aligning.",
   "BTC / Gold (BTCXAU)":"How many troy ounces of gold one bitcoin buys (BTC price ÷ gold spot). Strips out dollar debasement to show BTC's performance against the oldest hard money — rising = BTC outpacing gold.",
-  "STRC Live":"Strategy's STRC preferred, designed to trade near its $100 par. Distance from par plus short interest signals squeeze risk and the health of Strategy's preferred-equity financing.",
+  "STRC Live":"Strategy's STRC preferred, designed to trade near its $100 par. The status tag reads HEAVILY SHORTED whenever it trades below par (shorts are betting it stays under); distance from par sets the squeeze-risk level.",
   "Binance BTC/USDT":"Spot price on the world's highest-volume exchange — the global reference for BTC. It's the baseline that premiums and basis are measured against.",
   "Coinbase BTC/USD":"Spot price on the largest US-regulated exchange, a proxy for American institutional demand. Trading above Binance (a 'Coinbase premium') signals US buying pressure.",
   "Exchange Premiums":"The price gap between Coinbase and Binance. A positive Coinbase premium marks aggressive US/institutional accumulation; a negative gap means offshore/Asian demand is leading.",
@@ -1114,11 +1145,7 @@ const TIPS={
   "DXY Index":"The dollar against a basket of major currencies. BTC usually trades inversely — a weakening DXY, especially failing key levels, is a tailwind.",
   "USD/JPY (Carry)":"Yen per dollar — the key gauge for the yen carry trade. A rising rate (weak yen) keeps cheap-funding carry flows on; a sharp drop (yen strength) can force a carry unwind and broad risk-off, as in Aug 2024. Watch fast down-moves.",
   "Gold Spot":"The legacy debasement hedge. Tracked as a correlation check — when gold and BTC rise together it signals a broad hard-asset bid, not crypto-only flows.",
-  "WTI Crude":"US oil benchmark, watched as an inflation input and geopolitical gauge. Oil spikes feed inflation fears that shape Fed policy and risk appetite.",
-  "Brent Crude":"The international oil benchmark vs WTI's US focus. Its level and the Brent–WTI spread flag global supply stress, especially around shipping chokepoints.",
-  "Strait of Hormuz Status":"Manual toggle for the world's key oil chokepoint (~20% of global supply). Restriction spikes oil and risk-off sentiment; resolution is risk-on — a discretionary macro overlay.",
-  "MSTR Share Price":"Strategy's stock, a leveraged BTC proxy via its holdings and ability to issue equity/debt to buy more. Often moves ahead of BTC and reflects equity-market appetite for Bitcoin.",
-  "STRC Share Price":"One of Strategy's preferred securities, tracked vs $100 par. Trading below par with heavy short interest sets up squeeze dynamics and signals stress in Strategy's capital stack.",
+  "Fed Decision Odds":"Market-implied probability of a rate cut, hold or hike at the next FOMC meeting, from the Polymarket Fed-decision market (a close cousin of CME FedWatch, which has no free public API — the card links to it). Hikes and a hawkish Fed tighten liquidity and pressure BTC; cuts ease it.",
   "STRC vs Par ($100)":"STRC's distance from its $100 redemption value. How far below par, plus short positioning, indicates squeeze risk and the cost of Strategy's preferred financing.",
   "ATM Capacity":"Headroom in Strategy's at-the-market equity program — how much stock it can still sell to buy BTC. A loaded ATM means queued buy-side demand.",
 };
@@ -1190,6 +1217,7 @@ fetchFearGreed=fetchFG; // alias
 fetchFG();
 setTimeout(fetchOI, 800);
 setTimeout(fetchDXY, 1000);
+setTimeout(fetchFedOdds, 1100);
 setTimeout(fetchSTRCLive, 1200);
 setTimeout(fetch10Y, 1300);
 setTimeout(fetchJPY, 1400);
@@ -1211,7 +1239,8 @@ setInterval(fetchFunding, 60000);
 setInterval(fetchRSI, 300000);
 setInterval(fetchFG, 60000);
 setInterval(fetchOI, 120000);
-setInterval(fetchDXY, 120000);
+setInterval(fetchDXY, 30000);
+setInterval(fetchFedOdds, 300000);
 setInterval(fetch10Y, 120000);
 setInterval(fetchJPY, 120000);
 setInterval(fetchGold, 120000);
