@@ -112,6 +112,10 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
 .btn:hover{border-color:var(--text2);color:var(--text0)}
 .btn.active{color:var(--green);border-color:var(--green-border)}
 
+/* TREND */
+.rng{position:relative;height:6px;background:linear-gradient(90deg,var(--red),var(--amber),var(--green));border-radius:3px;margin:12px 0 8px;opacity:.6}
+.rng span{position:absolute;top:-3px;width:2px;height:12px;background:var(--text0);transform:translateX(-1px)}
+.rng-lbl{display:flex;justify-content:space-between;font-size:10px;color:var(--text1);font-variant-numeric:tabular-nums}
 /* FED ODDS */
 .fed-bar{display:flex;height:8px;border-radius:2px;overflow:hidden;background:var(--bg3);margin:8px 0 6px}
 .fed-bar span{display:block;height:100%;transition:width .6s ease}
@@ -271,6 +275,55 @@ body{background:var(--bg0);color:var(--text0);font-family:'IBM Plex Mono',monosp
 </div>
 
 <!-- SUPPLY COMPRESSION -->
+<div class="sec">Trend & Moving Averages</div>
+<div class="g5">
+  <div class="card">
+    <div class="lbl">50-Day MA</div>
+    <div class="val lg" id="ma50-val">--</div>
+    <div class="sub" id="ma50-sub">--</div>
+    <div class="src"><span class="sdot sdot-wait" id="d-ma"></span>Binance daily klines</div>
+  </div>
+  <div class="card">
+    <div class="lbl">200-Day MA</div>
+    <div class="val lg" id="ma200-val">--</div>
+    <div class="sub" id="ma200-sub">--</div>
+    <div class="src">Binance daily klines</div>
+  </div>
+  <div class="card">
+    <div class="lbl">200-Week MA</div>
+    <div class="val lg" id="wma-val">--</div>
+    <div class="sub" id="wma-sub">--</div>
+    <div class="src">Binance weekly klines</div>
+  </div>
+  <div class="card">
+    <div class="lbl">MA Cross (50/200)</div>
+    <div class="val lg" id="cross-val">--</div>
+    <div class="sub" id="cross-sub">--</div>
+    <div class="src">50-day vs 200-day</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Drawdown from ATH</div>
+    <div class="val lg" id="ath-val">--</div>
+    <div class="sub" id="ath-sub">--</div>
+    <div class="src">Binance weekly highs</div>
+  </div>
+</div>
+<div class="g2">
+  <div class="card">
+    <div class="lbl">Performance</div>
+    <div class="prem-row"><span style="font-size:10px;color:var(--text1)">7 days</span><span class="val sm" id="perf-7">--</span></div>
+    <div class="prem-row"><span style="font-size:10px;color:var(--text1)">30 days</span><span class="val sm" id="perf-30">--</span></div>
+    <div class="prem-row"><span style="font-size:10px;color:var(--text1)">90 days</span><span class="val sm" id="perf-90">--</span></div>
+    <div class="prem-row"><span style="font-size:10px;color:var(--text1)">Year to date</span><span class="val sm" id="perf-ytd">--</span></div>
+  </div>
+  <div class="card">
+    <div class="lbl">52-Week Range</div>
+    <div class="val lg" id="rng-val">--</div>
+    <div class="rng"><span id="rng-mark" style="left:50%"></span></div>
+    <div class="rng-lbl"><span id="rng-lo">--</span><span id="rng-mid" class="mut">--</span><span id="rng-hi">--</span></div>
+  </div>
+</div>
+
 <div class="sec">Institutional Supply Absorption</div>
 <div class="g3">
   <div class="card" id="card-etfhold">
@@ -449,6 +502,67 @@ function connectOB(){
     obWs.onerror=()=>setDot('d-ob','err');
     obWs.onclose=()=>{setDot('d-ob','wait');setTimeout(connectOB,3000)};
   }catch{setTimeout(connectOB,5000)}
+}
+// ── TREND & MOVING AVERAGES ───────────────────
+// Daily + weekly candles from Binance (CORS-open REST). Averages use closed candles plus the
+// live price as the newest point, so they move with the market instead of waiting for the close.
+const TR={d:null,w:null};
+async function fetchTrend(){
+  try{
+    const get=async i=>{
+      const r=await fetch('https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval='+i+'&limit=1000');
+      const j=await r.json();
+      if(!Array.isArray(j)||j.length<200)throw new Error('short');
+      return j.map(x=>({t:x[0],o:+x[1],h:+x[2],l:+x[3],c:+x[4]}));
+    };
+    const [d,w]=await Promise.all([get('1d'),get('1w')]);
+    TR.d=d; TR.w=w; setDot('d-ma','ok'); renderTrend();
+  }catch(e){setDot('d-ma','err');}
+}
+function renderTrend(){
+  if(!TR.d||!TR.w)return;
+  const D=TR.d, W=TR.w, px=S.bnPrice||D[D.length-1].c;
+  const cd=D.slice(0,-1).map(x=>x.c), cw=W.slice(0,-1).map(x=>x.c);          // closed candles only
+  const withLive=(arr,N)=>(arr.slice(-(N-1)).reduce((a,b)=>a+b,0)+px)/N;
+  const ma50=withLive(cd,50), ma200=withLive(cd,200), wma=withLive(cw,200);
+  const pct=(a,b)=>(a-b)/b*100, sg=x=>(x>=0?'+':'')+x.toFixed(1)+'%';
+  const day=t=>new Date(t).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+  const maCard=(id,ma,word)=>{
+    const p=pct(px,ma);
+    setV(id+'-val','$'+fmt(ma),p>=0?'up':'dn');
+    setV(id+'-sub',(p>=0?'▲ ':'▼ ')+sg(p)+' — price '+(p>=0?'above':'below')+' '+word,p>=0?'up':'dn');
+  };
+  maCard('ma50',ma50,'50-day'); maCard('ma200',ma200,'200-day'); maCard('wma',wma,'200-week');
+  // 50/200 cross: rolling averages over closed candles, then the live regime
+  const sma=(arr,N,i)=>{let t=0;for(let k=i-N+1;k<=i;k++)t+=arr[k];return t/N;};
+  let lastFlip=-1,prev=null;
+  for(let i=199;i<cd.length;i++){const g=sma(cd,50,i)>sma(cd,200,i);if(prev!==null&&g!==prev)lastFlip=i;prev=g;}
+  const golden=ma50>ma200;
+  let since=lastFlip<0?null:(cd.length-1)-lastFlip;
+  if(prev!==null&&golden!==prev)since=0;
+  const gap=pct(ma50,ma200);
+  setV('cross-val',golden?'GOLDEN':'DEATH',golden?'up':'dn');
+  setV('cross-sub',(since==null?'No cross in data':since===0?'Crossed today':since+'d since cross')+' · 50DMA '+sg(gap)+' vs 200DMA',golden?'up':'dn');
+  // ATH + drawdown
+  const athW=Math.max(...W.map(x=>x.h)), ath=Math.max(athW,px);
+  const dMax=D.reduce((a,x)=>x.h>a.h?x:a,D[0]);
+  const athT=dMax.h>=athW*0.999?dMax.t:W.reduce((a,x)=>x.h>a.h?x:a,W[0]).t;
+  const dd=pct(px,ath);
+  setV('ath-val',(dd>=-0.05?'0.0':dd.toFixed(1))+'%',dd>-10?'up':dd>-30?'neu':'dn');
+  setV('ath-sub','ATH $'+fmt(ath)+' · '+day(athT),'mut');
+  // performance
+  const n=D.length, ago=N=>D[n-1-N].c;
+  const yr=new Date().getUTCFullYear(), ytd=D.find(x=>new Date(x.t).getUTCFullYear()===yr);
+  const perf=(id,base)=>{if(!base)return;const p=pct(px,base);setV(id,sg(p),p>=0?'up':'dn');};
+  perf('perf-7',ago(7)); perf('perf-30',ago(30)); perf('perf-90',ago(90)); perf('perf-ytd',ytd&&ytd.o);
+  // 52-week range
+  const yrD=D.slice(-365), hi=Math.max(...yrD.map(x=>x.h),px), lo=Math.min(...yrD.map(x=>x.l),px);
+  const pos=(px-lo)/(hi-lo)*100;
+  setV('rng-val',pos.toFixed(0)+'% of range',pos>=66?'up':pos<=33?'dn':'neu');
+  $('rng-mark').style.left=Math.max(0,Math.min(100,pos))+'%';
+  setV('rng-lo','$'+fmt(lo)); setV('rng-hi','$'+fmt(hi)); setV('rng-mid',sg(pct(px,hi))+' from high');
+  S.ma={px,ma50,ma200,wma,golden,gap,since};
+  updateComposite();
 }
 // ── ORDER BOOK DEPTH (Binance + Coinbase) ─────
 // Dollar depth within ±band of each venue's mid price, from full-ish book snapshots
@@ -1142,6 +1256,17 @@ const GROUPS=[
      dir:()=>{const f=S.fed;return f.hike>=50?'dn':f.cut>=50?'up':'neu';},
      val:()=>{const l=fedLead();return l[0]+' '+l[1].toFixed(0)+'%';}},
   ]},
+  {name:'Trend',scored:true,rows:[
+    {name:'Price vs 200-day MA',has:()=>!!S.ma,
+     dir:()=>{const p=(S.ma.px-S.ma.ma200)/S.ma.ma200*100;return p>1?'up':p<-1?'dn':'neu';},
+     val:()=>'$'+fmt(S.ma.ma200)+' · '+fmtP((S.ma.px-S.ma.ma200)/S.ma.ma200*100,1)},
+    {name:'Price vs 50-day MA',has:()=>!!S.ma,
+     dir:()=>{const p=(S.ma.px-S.ma.ma50)/S.ma.ma50*100;return p>1?'up':p<-1?'dn':'neu';},
+     val:()=>'$'+fmt(S.ma.ma50)+' · '+fmtP((S.ma.px-S.ma.ma50)/S.ma.ma50*100,1)},
+    {name:'50/200 MA regime',has:()=>!!S.ma,
+     dir:()=>S.ma.golden?'up':'dn',
+     val:()=>(S.ma.golden?'Golden':'Death')+' cross · '+(S.ma.since==null?'--':S.ma.since+'d')},
+  ]},
   {name:'Flows',scored:true,rows:[
     {name:'US spot ETF net flow (latest day)',has:()=>S.etfFlow!=null,
      dir:()=>S.etfFlow>0?'up':S.etfFlow<0?'dn':'neu',
@@ -1160,6 +1285,8 @@ const GROUPS=[
      tag:()=>S.rsi<=30?'OVERSOLD':S.rsi>=70?'OVERBOUGHT':'NEUTRAL'},
     {name:'Fear & Greed',has:()=>S.fg!==null,val:()=>S.fg+'/100'+(S.fgLbl?' — '+S.fgLbl:''),
      tag:()=>S.fg<=20?'EXTREME FEAR':S.fg>=75?'EXTREME GREED':'NEUTRAL'},
+    {name:'Price vs 200-week MA',has:()=>!!S.ma,val:()=>'$'+fmt(S.ma.wma)+' · '+fmtP((S.ma.px-S.ma.wma)/S.ma.wma*100,1),
+     tag:()=>S.ma.px>=S.ma.wma?'ABOVE':'BELOW'},
     {name:'Book depth imbalance',has:()=>!!S.depth,val:()=>(S.depth.imb>=0?'+':'')+S.depth.imb.toFixed(0)+'% (±'+S.depth.band+'%)',
      tag:()=>S.depth.imb>=10?'BID-HEAVY':S.depth.imb<=-10?'ASK-HEAVY':'BALANCED'},
     {name:'STRC vs $100 par',has:()=>!!S.strc,val:()=>'$'+S.strc.toFixed(2),
@@ -1217,6 +1344,13 @@ const TIPS={
   "Fear / Greed":"A 0–100 sentiment composite of volatility, momentum, and volume. Used contrarily — extreme fear often marks local bottoms, extreme greed marks froth.",
   "RSI (14-Day)":"Momentum on a 0–100 scale over 14 daily candles. Below 30 is oversold (bounce risk), above 70 is overbought (pullback risk).",
   "Funding Rate (Perp)":"The periodic payment between perp longs and shorts that pins the perp price to spot. Positive = longs pay (crowded long); negative = shorts pay (crowded short, squeeze fuel). Reveals leveraged positioning.",
+  "50-Day MA":"Average of the last 50 daily closes, with live price as the newest point. The medium-term trend line: price above it is an uptrend, and it often acts as first support or resistance on pullbacks.",
+  "200-Day MA":"Average of the last 200 daily closes — the classic long-term trend line. Price holding above it is a bull regime; a decisive break below is widely read as a regime change and can trigger systematic selling. (Price ÷ this level is the Mayer Multiple.)",
+  "200-Week MA":"Average of the last 200 weekly closes (about 3.8 years). Price has tended to find major cycle-bottom support near it, and trading below it has been rare and deep.",
+  "MA Cross (50/200)":"Golden cross = 50-day above 200-day (uptrend regime); death cross = 50-day below. It lags price by weeks, so it confirms a trend rather than predicts one, and whipsaws in sideways markets.",
+  "Drawdown from ATH":"How far price sits below its all-time high. Context for where we are in the cycle; Bitcoin's past bear markets saw drawdowns of roughly 50–80%.",
+  "Performance":"Price change versus the close 7, 30 and 90 days ago, and since the first of the year (UTC).",
+  "52-Week Range":"Where price sits between its 52-week low and high. Near the top means strong trend; near the bottom means weak.",
   "Open Interest":"Total notional of open futures contracts. Rising OI into rising price = fresh conviction; rising OI into falling price = shorts building. Measures leverage in the system.",
   "Tradeable Float — All Exchanges (Your Derived Model)":"Estimated BTC actually available to trade after removing ETF, corporate, and pre-seeded custody. The supply-shock core: a smaller float means demand moves price harder.",
   "24h Exchange Netflow":"Net BTC flowing onto vs off exchanges. Outflows (coins leaving for custody) cut sell-side supply and are bullish; inflows are coins arriving to sell.",
@@ -1324,6 +1458,9 @@ setInterval(fetchOI, 120000);
 setInterval(fetchDXY, 30000);
 setInterval(fetchFedOdds, 300000);
 setInterval(fetchDepth, 20000);
+setTimeout(fetchTrend, 800);
+setInterval(fetchTrend, 600000);
+setInterval(renderTrend, 5000);
 setInterval(fetch10Y, 120000);
 setInterval(fetchJPY, 120000);
 setInterval(fetchGold, 120000);
